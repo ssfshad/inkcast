@@ -1,8 +1,8 @@
 @echo off
-title iPad Ink
+title InkCast
 cd /d "%~dp0"
 
-where python >nul 2>nul
+where python >/dev/null 2>nul
 if errorlevel 1 (
   echo Python is not installed.
   echo Install it from https://www.python.org/downloads/  and tick "Add python.exe to PATH".
@@ -18,5 +18,5 @@ if errorlevel 1 (
   exit /b
 )
 
-python ipad_ink.py
+python inkcast.py
 pause
