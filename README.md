@@ -1,12 +1,26 @@
-# InkCast
+# InkCast: draw on your Windows screen from an iPad or Android tablet
 
-Draw live on your Windows screen from any tablet: iPad or Android, with a pencil or your finger.
+![InkCast: draw live on your Windows screen from an iPad or Android tablet](screenshots/banner.png)
 
-Your PC gets an invisible, click-through ink layer on top of everything. Open a page in your tablet's browser, and whatever you draw there shows up on the PC instantly, while your mouse and keyboard keep working normally underneath. Screen recorders like OBS capture the ink, which makes it handy for teaching and tutorial videos.
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+![Platform: Windows](https://img.shields.io/badge/PC-Windows%2010%20%7C%2011-0078d4)
+![Tablets: iPad and Android](https://img.shields.io/badge/tablet-iPad%20%7C%20Android-34c759)
+![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-ffcc00)
 
-No tablet app to install. No subscription.
+**InkCast is a free, open-source screen annotation tool that turns your iPad or Android tablet into a wireless drawing pad for your Windows PC.** Write, highlight, draw arrows and point with a laser on top of anything on your screen (slides, code, browser, PDFs, videos) using an Apple Pencil, Samsung S Pen, any stylus, or just your finger.
 
-![Annotating a lesson slide](screenshots/annotate.png)
+Your PC gets an invisible, click-through ink layer on top of everything. Open a page in your tablet's browser, and whatever you draw there shows up on the PC instantly, while your mouse and keyboard keep working normally underneath. Screen recorders and streaming software like OBS capture the ink, which makes it ideal for teaching, online classes, tutorial videos and live streams.
+
+No tablet app to install. No subscription. No account.
+
+![Annotating a lesson slide live from a tablet](screenshots/annotate.png)
+
+## Who it's for
+
+- **Teachers and tutors** recording lessons or teaching online over Zoom, Google Meet or Teams
+- **YouTubers and course creators** who want to draw on screen while recording
+- **Streamers** who want to sketch, circle and point during a live stream
+- **Anyone presenting** who wants a laser pointer and whiteboard without buying a drawing tablet
 
 ## Features
 
@@ -75,6 +89,41 @@ The tray icon (red circle near the clock) also has Paste, Clear, Whiteboard, Hid
 - **Fingers** on = fingers draw. Off = only the pencil draws. It switches off automatically the first time a pencil is used.
 - **Preview** turns the live PC picture on the tablet on or off. **Screen** and **Board** switch where you're drawing.
 - The ink draws on your primary monitor.
+
+## How InkCast compares
+
+| | InkCast | Screen-drawing apps (Epic Pen, ZoomIt, gInk) | Tablet-as-monitor apps (Spacedesk, Duet, Astropad) |
+|---|---|---|---|
+| Draw from a tablet | Yes | No, you draw with the PC's mouse or pen | Yes |
+| Mouse keeps working while you draw | Yes, the tablet has its own ink layer | No, drawing takes over the cursor | No, the pencil moves the PC's cursor |
+| Works on iPad and Android | Both | n/a | Varies by app |
+| Price | Free and open source | Free / paid | Free to subscription |
+
+## FAQ
+
+**Can I use my iPad as a drawing tablet for Windows?**
+Yes. Run InkCast on the PC, open the address it shows in Safari on the iPad, and draw with an Apple Pencil (or your finger). The ink appears on your Windows screen live.
+
+**Does it work with Android tablets and the Samsung S Pen?**
+Yes. Open the page in Chrome on any Android tablet. S Pen, other styluses and fingers all work.
+
+**Does the ink show up in OBS, Zoom or screen recordings?**
+Yes. The ink is drawn on your real screen, so anything that captures the screen (OBS, Streamlabs, Zoom, Teams, Google Meet, the Xbox Game Bar recorder) captures it too.
+
+**Do I need to install an app on the tablet?**
+No. It runs in the tablet's browser. You can add it to the home screen to open it full screen like an app.
+
+**Does it need the internet?**
+Only for the first install. After that the PC and tablet talk directly over your local WiFi; nothing is sent to the cloud. (Pasting an image link is the exception: the PC downloads that image.)
+
+**Is there lag?**
+Very little on a normal home network. Only pen coordinates travel over WiFi, not video. A cable from the PC to the router and 5 GHz WiFi on the tablet give the best results.
+
+**Can I use it as a whiteboard?**
+Yes. Tap **Board** for a white, grid, black or green chalkboard background, and tap **Screen** to go back. Each keeps its own drawings.
+
+**Does it work on Mac or Linux?**
+The PC side is built and tested for Windows 10 and 11. Most of it is cross-platform Python, but keyboard shortcuts and fonts are Windows-specific for now.
 
 ## How it works
 
