@@ -50,18 +50,39 @@ No tablet app to install. No subscription. No account.
 
 ## Getting started
 
-1. Download this repository (green **Code** button → **Download ZIP**) and unzip it.
-2. Double-click **`Start InkCast.bat`**. The first run installs what it needs (PySide6, aiohttp, mss, Pillow), which takes a minute.
-3. If Windows asks about the firewall, click **Allow**.
-4. The window shows an address like `http://192.168.0.105:8765`. Open it in your tablet's browser.
-5. Optional: add it to your home screen (Safari: **Share → Add to Home Screen**; Chrome: **⋮ → Add to Home screen**) so it opens full screen like an app.
+**Before you start:** install [Python](https://www.python.org/downloads/) if you don't have it. On the first screen of the installer, tick **"Add python.exe to PATH"**.
 
-Or run it directly:
+### First time (about 2 minutes)
 
-```bash
-pip install -r requirements.txt
-python inkcast.py
-```
+1. **Make a folder** for InkCast anywhere, for example on your Desktop, and open it.
+2. **Open a terminal in that folder:** click the address bar at the top of the window, type `powershell`, and press **Enter**.
+3. **Download InkCast** by pasting this and pressing Enter:
+   ```powershell
+   Invoke-WebRequest https://github.com/ssfshad/inkcast/archive/refs/heads/main.zip -OutFile inkcast.zip; Expand-Archive inkcast.zip .; Remove-Item inkcast.zip; cd inkcast-main
+   ```
+   This puts InkCast in a new `inkcast-main` folder and moves the terminal into it.
+4. **Install what it needs:**
+   ```powershell
+   pip install -r requirements.txt
+   ```
+5. **Start InkCast:**
+   ```powershell
+   python inkcast.py
+   ```
+6. If Windows asks about the firewall, click **Allow**.
+7. InkCast shows an address like `http://192.168.0.105:8765`. **Open it in your tablet's browser** (the tablet must be on the same WiFi).
+
+### Every time after that
+
+Open the `inkcast-main` folder and double-click **`Start InkCast.bat`**. No terminal needed.
+
+> **Tip:** add the page to your tablet's home screen (Safari: **Share → Add to Home Screen**; Chrome: **⋮ → Add to Home screen**) so it opens full screen like an app.
+
+### Troubleshooting
+
+- **`No such file or directory: 'requirements.txt'`** or **`can't open file 'inkcast.py'`**: the terminal isn't inside the `inkcast-main` folder. Run `cd inkcast-main` and try again.
+- **`python` is not recognized:** Python isn't installed or wasn't added to PATH. Reinstall it and tick **"Add python.exe to PATH"**.
+- **The tablet can't open the address:** make sure both devices are on the same WiFi, turn off any VPN on the PC, and check that you clicked **Allow** on the firewall message.
 
 ## PC shortcuts
 
