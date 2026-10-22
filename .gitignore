@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 .venv/
+camera/scrcpy/
+camera/.scrcpy-download/
+camera/camera-settings.bat

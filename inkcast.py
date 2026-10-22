@@ -944,12 +944,25 @@ def main():
         toggle.setText(("Hide ink" if overlay.isVisible() else "Show ink") + "\tCtrl+Alt+H")
 
     toggle.triggered.connect(toggle_ink)
+    cam_bat = os.path.join(os.path.dirname(os.path.abspath(__file__)), "camera", "InkCast Camera.bat")
+    camera = QAction("Phone camera (USB)...")
+
+    def start_camera():
+        try:
+            os.startfile(cam_bat)   # opens the launcher in its own window
+        except (AttributeError, OSError) as e:
+            tray.showMessage(APP, f"Couldn't start the phone camera: {e}")
+
+    camera.triggered.connect(start_camera)
+    camera.setVisible(os.path.isfile(cam_bat))
     quit_ = QAction(f"Quit {APP}")
     quit_.triggered.connect(app.quit)
     menu.addAction(info)
     menu.addSeparator()
     for a in (paste, clear, board, toggle):
         menu.addAction(a)
+    menu.addSeparator()
+    menu.addAction(camera)
     menu.addSeparator()
     menu.addAction(quit_)
     tray.setContextMenu(menu)

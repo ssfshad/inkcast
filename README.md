@@ -34,6 +34,7 @@ No tablet app to install. No subscription. No account.
 - **Works with fingers or a pencil.** When a pencil is detected, fingers stop drawing automatically so your palm can rest on the screen (toggle with **Fingers**)
 - **Live screen preview** on the tablet so you can see where you're drawing
 - **PC keyboard shortcuts** so you can control it without touching the tablet
+- **Phone camera over USB:** use your Android phone as a face cam or document cam, with no app on the phone ([details](#use-your-android-phone-as-a-camera-usb-no-app))
 
 | Loop to select | Edit many things at once |
 |---|---|
@@ -82,6 +83,28 @@ The tray icon (red circle near the clock) also has Paste, Clear, Whiteboard, Hid
 - **On the tablet:** copy an image in your browser, tap **Paste** in the tool bar, then long-press the box and choose **Paste**. If only a link was copied, the PC downloads the image for you.
 - You can also tap **Image** to pick from your photos, or drag an image onto the page.
 
+## Use your Android phone as a camera (USB, no app)
+
+Turn your Android phone into a smooth, low-lag camera for your recordings: a **face cam** in the corner, a **document camera** pointed at paper or a book, or a **full-screen live camera you can draw over** with InkCast. It runs over a USB cable, so it doesn't depend on WiFi, and nothing gets installed on the phone.
+
+**Needs:** Android 12 or newer and a USB cable.
+
+1. **On the phone, once:** go to **Settings → About phone** and tap **Build number** 7 times. Then open **Developer options** and turn on **USB debugging**.
+2. Plug the phone into the PC.
+3. Double-click **`camera\InkCast Camera.bat`**, or choose **Phone camera (USB)** in the InkCast tray menu. The first time, it offers to download [scrcpy](https://github.com/Genymobile/scrcpy) from its official GitHub release and checks the download's checksum.
+4. On the phone, tap **Allow** on "Allow USB debugging?" (tick *Always allow*).
+5. Pick a mode, rotation and zoom. Your choices are remembered, so next time you just press Enter.
+
+| Mode | Use it for |
+|---|---|
+| **1 · Front camera, window** | Face cam. Add it in OBS with **Window Capture → [scrcpy.exe]: Camera** |
+| **2 · Back camera, window** | Document cam: paper, books, circuits, handwriting |
+| **3 · Back camera, full screen** | Draw over the live camera with InkCast, captured by your normal screen recording |
+
+While it runs: **Alt + ↑ / ↓** zoom, **Alt + ← / →** rotate, **Alt + F** full screen.
+
+> Want it as a webcam in Zoom, Meet or Teams? Add the camera window to OBS and click **Start Virtual Camera**, then pick *OBS Virtual Camera* as your webcam in the meeting app.
+
 ## Tips
 
 - For the lowest lag, connect the PC to the router with a cable and put the tablet on 5 GHz WiFi.
@@ -122,6 +145,9 @@ Very little on a normal home network. Only pen coordinates travel over WiFi, not
 **Can I use it as a whiteboard?**
 Yes. Tap **Board** for a white, grid, black or green chalkboard background, and tap **Screen** to go back. Each keeps its own drawings.
 
+**Can I use my Android phone as a webcam without installing an app?**
+Yes. InkCast's camera launcher streams your phone's camera to the PC over USB using scrcpy, with nothing installed on the phone. It needs Android 12 or newer with USB debugging turned on. See [Use your Android phone as a camera](#use-your-android-phone-as-a-camera-usb-no-app).
+
 **Does it work on Mac or Linux?**
 The PC side is built and tested for Windows 10 and 11. Most of it is cross-platform Python, but keyboard shortcuts and fonts are Windows-specific for now.
 
@@ -134,6 +160,10 @@ The PC side is built and tested for Windows 10 and 11. Most of it is cross-platf
 3. A screen capture that sends a low-resolution preview back to the tablet. It slows down while you draw so the pen gets the network first.
 
 Text uses the same font files on both ends (the PC shares its fonts with the tablet), so text looks the same in both places.
+
+## Credits
+
+The phone camera feature uses [scrcpy](https://github.com/Genymobile/scrcpy) by Genymobile (Apache License 2.0). It's downloaded from its official release on first use and isn't bundled with InkCast.
 
 ## License
 
