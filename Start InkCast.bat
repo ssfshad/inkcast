@@ -2,7 +2,7 @@
 title InkCast
 cd /d "%~dp0"
 
-where python >/dev/null 2>nul
+where python >nul 2>nul
 if errorlevel 1 (
   echo Python is not installed.
   echo Install it from https://www.python.org/downloads/  and tick "Add python.exe to PATH".
@@ -11,7 +11,7 @@ if errorlevel 1 (
 )
 
 echo Checking requirements (first run takes a minute)...
-python -m pip install --quiet --disable-pip-version-check PySide6 aiohttp mss pillow
+python -m pip install --quiet --disable-pip-version-check PySide6 aiohttp mss pillow qrcode
 if errorlevel 1 (
   echo Could not install requirements. Check your internet connection and try again.
   pause

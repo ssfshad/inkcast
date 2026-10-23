@@ -28,17 +28,18 @@ No tablet app to install. No subscription. No account.
 - **Shapes:** line, arrow, **curved arrow**, box, circle
 - **Text** in three fonts (sans, handwriting, serif); tap existing text to edit it
 - **Images:** pick from your tablet, paste from the clipboard, drag and drop, or copy an image on the PC and press `Ctrl+Alt+V`
-- **Select:** tap one thing, or draw a loop around several. Then move them, resize them from the corner dots, or change their color, size or font together
-- **Whiteboard:** switch between your screen and a blank board (white, grid, black or green chalkboard); each keeps its own drawings
+- **Select:** tap one thing, or drag a circle around several. Then move them, resize them from the corner dots, or change their color, size or font together
+- **Colors:** ten quick colors plus a full color picker. Tap the selected color again to swap it for any color you like; your palette is remembered
+- **Whiteboard:** tap **Board** and pick a white, grid, black or green chalkboard board; each keeps its own drawings
 - **Undo / redo, eraser, clear**
 - **Works with fingers or a pencil.** When a pencil is detected, fingers stop drawing automatically so your palm can rest on the screen (toggle with **Fingers**)
 - **Live screen preview** on the tablet so you can see where you're drawing
 - **PC keyboard shortcuts** so you can control it without touching the tablet
 - **Phone camera over USB:** use your Android phone as a face cam or document cam, with no app on the phone ([details](#use-your-android-phone-as-a-camera-usb-no-app))
 
-| Loop to select | Edit many things at once |
+| Circle to select | Edit many things at once |
 |---|---|
-| ![Lasso selection](screenshots/lasso.png) | ![Selected items recolored](screenshots/select.png) |
+| ![Circle selection](screenshots/lasso.png) | ![Selected items recolored](screenshots/select.png) |
 
 ![Whiteboard mode](screenshots/whiteboard.png)
 
@@ -70,7 +71,7 @@ No tablet app to install. No subscription. No account.
    python inkcast.py
    ```
 6. If Windows asks about the firewall, click **Allow**.
-7. InkCast shows an address like `http://192.168.0.105:8765`. **Open it in your tablet's browser** (the tablet must be on the same WiFi).
+7. InkCast opens a window with a **QR code**. **Scan it with your tablet's camera** and tap the link. Or type the address shown under it (like `http://192.168.0.105:8765`) into the tablet's browser. The tablet must be on the same WiFi. The window closes by itself once the tablet connects.
 
 ### Every time after that
 
@@ -96,7 +97,7 @@ Open the `inkcast-main` folder and double-click **`Start InkCast.bat`**. No term
 | `Ctrl+Alt+B` | Change whiteboard background |
 | `Ctrl+Alt+V` | Paste the image you copied on the PC |
 
-The tray icon (red circle near the clock) also has Paste, Clear, Whiteboard, Hide and Quit.
+The tray icon (red circle near the clock) also has Paste, Clear, Whiteboard, Hide and Quit. Click it to show the QR code again.
 
 ## Pasting images
 
@@ -164,7 +165,7 @@ Only for the first install. After that the PC and tablet talk directly over your
 Very little on a normal home network. Only pen coordinates travel over WiFi, not video. A cable from the PC to the router and 5 GHz WiFi on the tablet give the best results.
 
 **Can I use it as a whiteboard?**
-Yes. Tap **Board** for a white, grid, black or green chalkboard background, and tap **Screen** to go back. Each keeps its own drawings.
+Yes. Tap **Board** and pick a white, grid, black or green chalkboard background from the menu, and tap **Screen** to go back. Each keeps its own drawings.
 
 **Can I use my Android phone as a webcam without installing an app?**
 Yes. InkCast's camera launcher streams your phone's camera to the PC over USB using scrcpy, with nothing installed on the phone. It needs Android 12 or newer with USB debugging turned on. See [Use your Android phone as a camera](#use-your-android-phone-as-a-camera-usb-no-app).

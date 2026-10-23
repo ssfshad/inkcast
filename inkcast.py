@@ -27,7 +27,7 @@ from aiohttp import web
 from PySide6.QtCore import Qt, QObject, Signal, QPointF, QRectF, QTimer, QBuffer, QByteArray, QIODevice
 from PySide6.QtGui import (QAction, QColor, QFont, QGuiApplication, QIcon, QImage, QPainter,
                            QPainterPath, QPen, QPixmap, QPolygonF, QRegion)
-from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon, QWidget
+from PySide6.QtWidgets import QApplication, QLabel, QMenu, QSystemTrayIcon, QVBoxLayout, QWidget
 
 APP = "InkCast"
 PORT = int(os.environ.get("INKCAST_PORT", "8765"))
@@ -154,6 +154,7 @@ def qimage_to_dataurl(img):
 class Bridge(QObject):
     ops = Signal(str)       # raw JSON text from the tablet, parsed on the GUI thread
     hotkey = Signal(str)    # name of a pressed global shortcut
+    tablet = Signal()       # a tablet connected
 
 
 def smooth_path(pts):
@@ -746,6 +747,7 @@ class Server:
                 pass
         self.clients.add(ws)
         print("Tablet connected:", request.remote)
+        self.bridge.tablet.emit()
         await ws.send_str(json.dumps({
             "t": "hello", "aspect": self.aspect, "page": self.page, "bg": self.bg,
             "pages": {n: list(v.values()) for n, v in self.pages.items()}}))
@@ -886,6 +888,85 @@ def tray_icon():
     return QIcon(pm)
 
 
+def qr_pixmap(text, module=7):
+    """QR code for text as a crisp pixmap, or None if the qrcode package isn't installed."""
+    try:
+        import qrcode
+    except ImportError:
+        return None
+    qr = qrcode.QRCode(border=3, error_correction=qrcode.constants.ERROR_CORRECT_M)
+    qr.add_data(text)
+    qr.make(fit=True)
+    m = qr.get_matrix()
+    dpr = QGuiApplication.primaryScreen().devicePixelRatio()
+    s = max(1, round(module * dpr))          # whole device pixels per module keeps it sharp
+    pm = QPixmap(len(m) * s, len(m) * s)
+    pm.fill(Qt.white)
+    p = QPainter(pm)
+    p.setPen(Qt.NoPen)
+    p.setBrush(Qt.black)
+    for y, row in enumerate(m):
+        for x, dark in enumerate(row):
+            if dark:
+                p.drawRect(x * s, y * s, s, s)
+    p.end()
+    pm.setDevicePixelRatio(dpr)
+    return pm
+
+
+class ConnectWindow(QWidget):
+    """Shows the tablet address as a QR code and as text to type."""
+    def __init__(self, url):
+        super().__init__(None, Qt.Window | Qt.WindowStaysOnTopHint)
+        self.setWindowTitle(f"{APP} - connect your tablet")
+        self.setWindowIcon(tray_icon())
+        self.setStyleSheet("QWidget{background:#1c1c1e;color:#f2f2f7;font-family:'Segoe UI'}"
+                           "#qr{background:#fff;border-radius:12px;padding:10px}"
+                           "#url{font-size:24px;font-weight:700;color:#fff}"
+                           "#mut{color:#8e8e93;font-size:13px}")
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(28, 22, 28, 22)
+        lay.setSpacing(10)
+
+        def label(text, name=None, size=None):
+            w = QLabel(text)
+            w.setAlignment(Qt.AlignCenter)
+            w.setWordWrap(True)
+            if name:
+                w.setObjectName(name)
+            if size:
+                w.setStyleSheet(f"font-size:{size}px;font-weight:600")
+            lay.addWidget(w)
+            return w
+
+        pm = qr_pixmap(url)
+        if pm is not None:
+            label("Scan with your tablet's camera", size=17)
+            qr = QLabel()
+            qr.setObjectName("qr")
+            qr.setPixmap(pm)
+            qr.setAlignment(Qt.AlignCenter)
+            lay.addWidget(qr, 0, Qt.AlignCenter)
+            label("or type this into the tablet's browser:", "mut")
+        else:
+            label("Type this into your tablet's browser:", size=17)
+        u = label(url, "url")
+        u.setWordWrap(False)
+        u.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        label("The tablet must be on the same WiFi as this PC.\n"
+              "This window closes when your tablet connects.\n"
+              "Open it again from the tray icon.", "mut")
+        self.setMinimumWidth(380)
+        self.adjustSize()
+        self.setFixedSize(self.size())
+
+    def show_centered(self):
+        self.move(QGuiApplication.primaryScreen().availableGeometry().center() - self.rect().center())
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+
 def main():
     signal.signal(signal.SIGINT, signal.SIG_DFL)   # Ctrl+C in the console quits
     QGuiApplication.setHighDpiScaleFactorRoundingPolicy(
@@ -928,9 +1009,12 @@ def main():
             return
         tray.showMessage(APP, "No image in the clipboard. Right-click an image and choose Copy image first.")
 
+    connect_win = ConnectWindow(url)
+    bridge.tablet.connect(connect_win.hide)
+
     menu = QMenu()
-    info = QAction(f"Tablet address: {url}")
-    info.setEnabled(False)
+    info = QAction(f"Connect a tablet (QR code)...\t{url}")
+    info.triggered.connect(connect_win.show_centered)
     clear = QAction("Clear ink\tCtrl+Alt+C")
     clear.triggered.connect(lambda: server.command("clear"))
     board = QAction("Whiteboard on / off\tCtrl+Alt+W")
@@ -966,7 +1050,10 @@ def main():
     menu.addSeparator()
     menu.addAction(quit_)
     tray.setContextMenu(menu)
+    tray.activated.connect(lambda reason: connect_win.show_centered()
+                           if reason == QSystemTrayIcon.Trigger else None)
     tray.show()
+    connect_win.show_centered()
 
     def on_hotkey(name):
         if name == "hide":
@@ -982,7 +1069,8 @@ def main():
     print("=" * 62)
     print(f"  {APP} is running")
     print()
-    print("  On your tablet (iPad or Android), open the browser and go to:")
+    print("  On your tablet (iPad or Android), scan the QR code in the InkCast")
+    print("  window, or open the browser and go to:")
     print(f"     {url}")
     others = [ip for ip in all_ips() if ip not in url]
     if others:
@@ -1033,8 +1121,17 @@ html,body{margin:0;height:100%;background:#000;color:var(--fg);overflow:hidden;o
 .tb:disabled{opacity:.3}
 .sep{width:36px;height:1px;background:#3a3a3c;margin:3px 0;flex:none}
 .vsep{width:1px;height:30px;background:#3a3a3c;margin:0 3px;flex:none}
-.sw{width:26px;height:26px;border-radius:50%;flex:none;border:2px solid #48484a;padding:0}
+.sw{width:26px;height:26px;border-radius:50%;flex:none;border:2px solid #48484a;padding:0;position:relative;overflow:hidden}
 .sw.on{outline:3px solid #fff;outline-offset:2px}
+.sw input{position:absolute;inset:-8px;width:50px;height:50px;opacity:0;border:0;padding:0;pointer-events:none}
+.sw.on input{pointer-events:auto}
+#bgmenu{position:fixed;z-index:7;display:none;min-width:170px;background:#2c2c2e;border:1px solid #3a3a3c;border-radius:12px;
+  padding:6px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+#bgmenu.show{display:block}
+.bgo{display:flex;align-items:center;gap:10px;width:100%;height:42px;border:0;border-radius:8px;background:transparent;
+  color:var(--fg);font:inherit;font-size:15px;padding:0 10px;text-align:left}
+.bgo.on{background:var(--on);color:#fff}
+.bgo .bgSw{width:22px;height:22px;border-radius:6px;border:2px solid #636366;flex:none}
 #custom{width:26px;height:26px;border-radius:50%;border:2px solid #48484a;padding:0;overflow:hidden;flex:none;position:relative;
   background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red)}
 #custom.on{outline:3px solid #fff;outline-offset:2px}
@@ -1044,7 +1141,6 @@ html,body{margin:0;height:100%;background:#000;color:var(--fg);overflow:hidden;o
 #fonts{display:flex;gap:2px;flex:none}
 .fb{width:34px;height:38px;border-radius:9px;border:0;background:var(--btn);color:var(--fg);font-size:18px;flex:none;padding:0}
 .fb.on{background:var(--on);color:#fff}
-#bgSw{width:22px;height:22px;border-radius:6px;border:2px solid #636366;display:block}
 #status{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--mut);white-space:nowrap;flex:none;padding:0 4px 0 8px;font-size:12px}
 #led{width:9px;height:9px;border-radius:50%;background:#ff453a}
 #led.ok{background:#30d158}
@@ -1074,6 +1170,7 @@ input[type=file]{display:none}
 <div id="toast"></div>
 <div id="pastebox"><div id="pastearea" contenteditable="true">Long-press here and tap <b>&nbsp;Paste&nbsp;</b><br>(or press Ctrl/⌘+V)</div>
   <button id="pasteclose">Cancel</button></div>
+<div id="bgmenu"></div>
 <input type="file" id="file" accept="image/*">
 <script>
 "use strict";
@@ -1111,6 +1208,10 @@ const STROKE = {pen:1,marker:1,hl:1,neon:1,laser:1,farrow:1}, SHAPE = {line:1,ar
 const WMUL = {pen:1,marker:2.2,hl:4,neon:1.2,laser:1.2,farrow:1};
 const BGS = ['white','grid','black','green'];
 const BGC = {white:'#ffffff', grid:'#ffffff', black:'#141517', green:'#1f3a2c'};
+const BGN = {white:'White', grid:'Grid', black:'Black', green:'Chalkboard'};
+const bgCss = b => b==='grid'
+  ? 'linear-gradient(#b8bec6 1px,transparent 1px) 0 0/6px 6px,linear-gradient(90deg,#b8bec6 1px,transparent 1px) 0 0/6px 6px,#fff'
+  : BGC[b];
 const FONTS = {
   sans:  'InkSans,-apple-system,Roboto,"Segoe UI",sans-serif',
   hand:  'InkHand,"Ink Free","Comic Sans MS","Chalkboard SE","Comic Neue",cursive',
@@ -1123,12 +1224,14 @@ try { Object.assign(S, JSON.parse(localStorage.getItem('inkcast.s')||'{}')); } c
 if (!TOOLS.some(t => t[0]===S.tool) || S.tool==='image' || S.tool==='paste') S.tool = 'pen';
 if (!BGS.includes(S.bg)) S.bg = 'white';
 if (!FONTS[S.font]) S.font = 'sans';
+const isHex = c => typeof c==='string' && /^#[0-9a-f]{6}$/i.test(c);
+if (!Array.isArray(S.palette) || S.palette.length!==COLORS.length || !S.palette.every(isHex)) S.palette = COLORS.slice();
 const save = () => { try { localStorage.setItem('inkcast.s', JSON.stringify(S)); } catch(e){} };
 
 let pages = {screen:[], board:[]}, page = 'screen', items = pages.screen;
 const HIST = {screen:{h:[], r:[]}, board:{h:[], r:[]}};
 let hist = HIST.screen.h, redoS = HIST.screen.r;
-let lasers = [], cur = null, pid = null, drag = null, erase = null, sel = [], lasso = null;
+let lasers = [], cur = null, pid = null, drag = null, erase = null, sel = [], marq = null;
 let editor = null, downPt = null, sizeBefore = null, prevTool = 'pen', crect = null;
 let aspect = 16/9, sw = 1, sh = 1;
 const $ = id => document.getElementById(id);
@@ -1155,10 +1258,25 @@ for (const t of TOOLS) {
   };
   side.appendChild(b);
 }
-for (const c of COLORS) {
-  const b = document.createElement('button'); b.className='sw'; b.style.background=c; b.dataset.c=c;
-  b.onclick = () => setColor(c); topBar.appendChild(b);
+// palette: tap a color to use it; tap the selected color again to change it (remembered on this tablet)
+S.palette.forEach((c, i) => {
+  const b = document.createElement('div'); b.className='sw'; b.title='Tap again to change this color';
+  b.innerHTML = '<input type="color">';
+  const inp = b.firstChild;
+  b.onclick = e => {
+    if (e.target===inp) return;
+    setColor(S.palette[i]);
+    if (!S.palTip) { S.palTip = true; save(); toast('Tip: tap the selected color again to change it'); }
+  };
+  inp.oninput = e => { S.palette[i] = e.target.value.toLowerCase(); save(); paintPalette(); setColor(S.palette[i]); };
+  topBar.appendChild(b);
+});
+function paintPalette(){
+  document.querySelectorAll('.sw').forEach((b, i) => {
+    const c = S.palette[i]; b.style.background = c; b.dataset.c = c; b.firstChild.value = c;
+  });
 }
+paintPalette();
 const tbtn = (icon,label,id) => '<button class="tb" id="'+id+'">'+svg(icon)+'<span>'+label+'</span></button>';
 topBar.insertAdjacentHTML('beforeend',
  '<label id="custom" title="Custom color"><input type="color" id="cpick"></label><div class="vsep"></div>'+
@@ -1166,7 +1284,6 @@ topBar.insertAdjacentHTML('beforeend',
  '<div id="fonts"><div class="vsep"></div><button class="fb" data-f="sans">Aa</button><button class="fb" data-f="hand">Aa</button><button class="fb" data-f="serif">Aa</button></div>'+
  '<div class="vsep"></div>'+tbtn('undo','Undo','undo')+tbtn('redo','Redo','redo')+tbtn('trash','Clear','clear')+tbtn('del','Delete','delB')+
  '<div class="vsep"></div>'+tbtn('screen','Screen','screenB')+tbtn('board','Board','boardB')+
- '<button class="tb" id="bgB"><span id="bgSw"></span><span>BG</span></button>'+
  '<div class="vsep"></div>'+tbtn('eye','Preview','liveB')+tbtn('hand','Fingers','fingB')+
  '<div id="status"><span id="led"></span><span id="stxt">Connecting</span></div>');
 document.querySelectorAll('.fb').forEach(b => { b.style.font = fontOf(b.dataset.f, 16); b.onclick = () => setFont(b.dataset.f); });
@@ -1189,8 +1306,27 @@ $('size').onchange = () => {
 };
 $('undo').onclick = undo; $('redo').onclick = redo; $('clear').onclick = clearAll; $('delB').onclick = deleteSel;
 $('screenB').onclick = () => setPage('screen');
-$('boardB').onclick = () => setPage('board');
-$('bgB').onclick = () => cycleBg();
+// Board opens a menu of whiteboards
+const bgMenu = $('bgmenu');
+bgMenu.innerHTML = BGS.map(b => '<button class="bgo" data-bg="'+b+'"><span class="bgSw" style="background:'+bgCss(b)+'"></span>'+BGN[b]+'</button>').join('');
+bgMenu.querySelectorAll('.bgo').forEach(o => { o.onclick = () => { closeBgMenu(); setBoard(o.dataset.bg); }; });
+function openBgMenu(){
+  const r = $('boardB').getBoundingClientRect();
+  bgMenu.classList.add('show');
+  bgMenu.style.top = (r.bottom + 6) + 'px';
+  bgMenu.style.left = Math.max(8, Math.min(r.left, innerWidth - bgMenu.offsetWidth - 8)) + 'px';
+  ui();
+}
+function closeBgMenu(){ bgMenu.classList.remove('show'); }
+$('boardB').onclick = () => bgMenu.classList.contains('show') ? closeBgMenu() : openBgMenu();
+// a tap outside the menu only closes it (it doesn't draw)
+document.addEventListener('pointerdown', e => {
+  if (!bgMenu.classList.contains('show') || bgMenu.contains(e.target) || $('boardB').contains(e.target)) return;
+  closeBgMenu();
+  if (e.target===cv) { e.preventDefault(); e.stopPropagation(); }
+}, true);
+$('top').addEventListener('scroll', closeBgMenu);
+addEventListener('resize', closeBgMenu);
 $('liveB').onclick = () => { S.live = !S.live; save(); updBg(); ui(); reqFrame(); toast(S.live ? 'Live PC preview on' : 'Live PC preview off'); };
 $('fingB').onclick = () => {
   S.fingers = !S.fingers; S.fingersSet = true; save(); ui();
@@ -1233,7 +1369,7 @@ function setFont(f){
 function ui(){
   document.querySelectorAll('.tb[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool===S.tool));
   document.querySelectorAll('.sw').forEach(b => b.classList.toggle('on', b.dataset.c===S.color));
-  $('custom').classList.toggle('on', !COLORS.includes(S.color));
+  $('custom').classList.toggle('on', !S.palette.includes(S.color));
   const d = Math.max(3, Math.min(32, S.size*(WMUL[S.tool]||1)*0.9));
   $('dot').innerHTML = '<div style="width:'+d+'px;height:'+d+'px;border-radius:50%;background:'+S.color+
     (S.tool==='hl'?';opacity:.45':'')+'"></div>';
@@ -1248,14 +1384,12 @@ function ui(){
   $('boardB').classList.toggle('on', page==='board');
   $('liveB').classList.toggle('on', S.live);
   $('fingB').classList.toggle('on', S.fingers);
-  $('bgSw').style.background = S.bg==='grid'
-    ? 'linear-gradient(#b8bec6 1px,transparent 1px) 0 0/6px 6px,linear-gradient(90deg,#b8bec6 1px,transparent 1px) 0 0/6px 6px,#fff'
-    : BGC[S.bg];
+  document.querySelectorAll('.bgo').forEach(o => o.classList.toggle('on', page==='board' && o.dataset.bg===S.bg));
   let h = '';
   if (S.tool==='text') h = 'Tap where you want text · tap a text to edit it';
   else if (S.tool==='select') h = sel.length
     ? (sel.length>1 ? sel.length+' selected · ' : '') + 'drag to move · corner dots to resize · tap a color, size or font to change it'
-    : 'Tap something, or draw a loop around things to select them';
+    : 'Tap something, or drag a circle around things to select them';
   else if (S.tool==='farrow') h = 'Draw a curved line — the arrow head goes where you lift the pen';
   $('hint').textContent = h;
 }
@@ -1373,7 +1507,7 @@ function render(){
     let f = 1; if (l._end) { const a = now - l._end - 600; if (a > 0) f = Math.max(0, 1 - a/600); }
     draw(ctx, l, W, Hc, f, l===cur ? l._pred : null);
   }
-  drawLasso(W, Hc);
+  drawMarq(W, Hc);
   drawSel(W, Hc);
   needDraw = lasers.length > 0;
 }
@@ -1433,12 +1567,12 @@ function drawSel(W, Hc){
   }
   ctx.restore();
 }
-function drawLasso(W, Hc){
-  if (!lasso || lasso.length < 2) return;
-  const d = devicePixelRatio||1;
-  ctx.save(); ctx.beginPath(); ctx.moveTo(lasso[0][0]*W, lasso[0][1]*Hc);
-  for (const p of lasso) ctx.lineTo(p[0]*W, p[1]*Hc);
-  ctx.closePath(); ctx.fillStyle='rgba(10,132,255,.10)'; ctx.fill();
+function drawMarq(W, Hc){
+  if (!marq) return;
+  const d = devicePixelRatio||1, e = ellOf(marq);
+  if (e.rx <= 0 || e.ry <= 0) return;
+  ctx.save(); ctx.beginPath(); ctx.ellipse(e.cx*W, e.cy*Hc, e.rx*W, e.ry*Hc, 0, 0, Math.PI*2);
+  ctx.fillStyle='rgba(10,132,255,.10)'; ctx.fill();
   ctx.setLineDash([7*d,6*d]); ctx.lineWidth=2*d; ctx.strokeStyle='#0a84ff'; ctx.stroke(); ctx.restore();
 }
 function geomOf(it){
@@ -1456,25 +1590,22 @@ function xfGeom(g, f, tx, ty){   // x' = f*x + tx, sizes * f  (same formula as t
   for (const k of ['w','h','fs','tw','th']) if (g[k] !== undefined) o[k] = g[k]*f;
   return o;
 }
-function inPoly(x, y, P){
-  let c = false;
-  for (let i=0, j=P.length-1; i<P.length; j=i++) {
-    const xi=P[i][0]*sw, yi=P[i][1]*sh, xj=P[j][0]*sw, yj=P[j][1]*sh;
-    if (((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi)) c = !c;
-  }
-  return c;
-}
+// selection circle: drawn corner to corner, like the Circle tool
+const ellOf = m => ({cx:(m.a[0]+m.b[0])/2, cy:(m.a[1]+m.b[1])/2, rx:Math.abs(m.b[0]-m.a[0])/2, ry:Math.abs(m.b[1]-m.a[1])/2});
 function keyPts(it){
   if (STROKE[it.k]) { const step = Math.max(1, Math.floor(it.pts.length/40)); return it.pts.filter((_,i) => i%step===0); }
   if (SHAPE[it.k]) return [it.a, it.b, [(it.a[0]+it.b[0])/2, (it.a[1]+it.b[1])/2]];
   const b = bboxOf(it); return [[b.x0,b.y0],[b.x1,b.y0],[b.x1,b.y1],[b.x0,b.y1],[(b.x0+b.x1)/2,(b.y0+b.y1)/2]];
 }
-function lassoSelect(L){
+function circleSelect(m){
+  const e = ellOf(m);
+  if (e.rx <= 0 || e.ry <= 0) return [];
+  const inside = q => ((q[0]-e.cx)/e.rx)**2 + ((q[1]-e.cy)/e.ry)**2 <= 1;
   return items.filter(it => {
-    if (it.k==='text' || it.k==='img') { const b = bboxOf(it); return inPoly((b.x0+b.x1)/2*sw, (b.y0+b.y1)/2*sh, L); }
+    if (it.k==='text' || it.k==='img') { const b = bboxOf(it); return inside([(b.x0+b.x1)/2, (b.y0+b.y1)/2]); }
     const P = keyPts(it); let n = 0;
-    for (const q of P) if (inPoly(q[0]*sw, q[1]*sh, L)) n++;
-    return n >= Math.max(1, P.length*0.6);   // most of a line/shape must be inside the loop
+    for (const q of P) if (inside(q)) n++;
+    return n >= Math.max(1, P.length*0.5);   // at least half of a line/shape must be inside the circle
   });
 }
 function hitSelect(p){
@@ -1568,18 +1699,19 @@ function setPage(p){
   if (editor) commitEditor();
   if (cur) { send({t:'end', id:cur.id}); cur = null; }
   if (drag) { send({t:'end', ids:[...drag.set].map(it => it.id)}); drag = null; }
-  erase = null; pid = null; sel = []; lasso = null;
+  erase = null; pid = null; sel = []; marq = null;
   const changed = p !== page;
   page = p; items = pages[p]; hist = HIST[p].h; redoS = HIST[p].r;
   send({t:'page', p, bg:S.bg});
   baseDirty = needDraw = true; updBg(); reqFrame(); ui();
   if (changed) toast(p==='board' ? 'Whiteboard' : 'Screen');
 }
-function cycleBg(){
-  S.bg = BGS[(BGS.indexOf(S.bg)+1) % BGS.length]; save();
+function setBoard(b){
+  S.bg = b; save();
   if (page!=='board') setPage('board');
   else { send({t:'page', p:'board', bg:S.bg}); baseDirty = needDraw = true; ui(); }
 }
+function cycleBg(){ setBoard(BGS[(BGS.indexOf(S.bg)+1) % BGS.length]); }
 
 // ---------------- text
 const fsFor = () => 12 + S.size*3;
@@ -1670,7 +1802,7 @@ cv.addEventListener('pointerdown', e => {
     if (hit) {
       if (hit.it && !sel.includes(hit.it)) sel = [hit.it];
       startDrag(hit.mode, p);
-    } else { sel = []; lasso = [p]; }
+    } else { sel = []; marq = {a:p, b:p}; }
   }
   flush(); needDraw = true; ui();
 });
@@ -1691,9 +1823,8 @@ cv.addEventListener('pointermove', e => {
     cur.b = pt(e); commit(); pend = {op:{t:'upd', id:cur.id, b:cur.b}}; needDraw = true;
   } else if (erase) {
     for (const ev of evs) eraseAt(pt(ev));
-  } else if (lasso) {
-    for (const ev of evs) lasso.push(pt(ev));
-    needDraw = true;
+  } else if (marq) {
+    marq.b = pt(e); needDraw = true;
   } else if (drag) {
     const p = pt(e), m = drag.mode, dx = p[0]-drag.p0[0], dy = p[1]-drag.p0[1];
     if (m==='move' || m[0]==='g') {
@@ -1737,10 +1868,9 @@ function endPointer(e){
   } else if (erase) {
     if (erase.length) pushHist({a:'del', its:erase});
     erase = null;
-  } else if (lasso) {
-    const L = lasso; lasso = null;
-    let len = 0; for (let i=1;i<L.length;i++) len += Math.hypot((L[i][0]-L[i-1][0])*sw, (L[i][1]-L[i-1][1])*sh);
-    sel = len > 12 ? lassoSelect(L) : [];
+  } else if (marq) {
+    const m = marq; marq = null;
+    sel = Math.hypot((m.b[0]-m.a[0])*sw, (m.b[1]-m.a[1])*sh) > 12 ? circleSelect(m) : [];
   } else if (drag) {
     const d = drag; drag = null;
     send({t:'end', ids:[...d.set].map(it => it.id)});
