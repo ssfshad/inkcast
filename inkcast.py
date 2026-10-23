@@ -1123,14 +1123,18 @@ html,body{margin:0;height:100%;background:#000;color:var(--fg);overflow:hidden;o
 .vsep{width:1px;height:30px;background:#3a3a3c;margin:0 3px;flex:none}
 .sw{width:26px;height:26px;border-radius:50%;flex:none;border:2px solid #48484a;padding:0;position:relative;overflow:hidden}
 .sw.on{outline:3px solid #fff;outline-offset:2px}
-.sw input{position:absolute;inset:-8px;width:50px;height:50px;opacity:0;border:0;padding:0;pointer-events:none}
-.sw.on input{pointer-events:auto}
-#bgmenu{position:fixed;z-index:7;display:none;min-width:170px;background:#2c2c2e;border:1px solid #3a3a3c;border-radius:12px;
+#pal{display:contents}
+#addc{width:26px;height:26px;border-radius:50%;border:2px dashed #636366;color:var(--fg);flex:none;position:relative;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;font-size:20px;line-height:1}
+#addc input,.bgo input{position:absolute;inset:-8px;width:calc(100% + 16px);height:calc(100% + 16px);opacity:0;border:0;padding:0}
+#bgmenu,#palmenu{position:fixed;z-index:7;display:none;min-width:170px;background:#2c2c2e;border:1px solid #3a3a3c;border-radius:12px;
   padding:6px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
-#bgmenu.show{display:block}
+#bgmenu.show,#palmenu.show{display:block}
 .bgo{display:flex;align-items:center;gap:10px;width:100%;height:42px;border:0;border-radius:8px;background:transparent;
-  color:var(--fg);font:inherit;font-size:15px;padding:0 10px;text-align:left}
+  color:var(--fg);font:inherit;font-size:15px;padding:0 10px;text-align:left;position:relative;overflow:hidden}
 .bgo.on{background:var(--on);color:#fff}
+.bgo:disabled{opacity:.35}
+#palDel{color:#ff453a}
 .bgo .bgSw{width:22px;height:22px;border-radius:6px;border:2px solid #636366;flex:none}
 #custom{width:26px;height:26px;border-radius:50%;border:2px solid #48484a;padding:0;overflow:hidden;flex:none;position:relative;
   background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red)}
@@ -1171,6 +1175,11 @@ input[type=file]{display:none}
 <div id="pastebox"><div id="pastearea" contenteditable="true">Long-press here and tap <b>&nbsp;Paste&nbsp;</b><br>(or press Ctrl/⌘+V)</div>
   <button id="pasteclose">Cancel</button></div>
 <div id="bgmenu"></div>
+<div id="palmenu">
+  <label class="bgo"><span class="bgSw" id="palSw"></span>Change color<input type="color" id="palpick"></label>
+  <button class="bgo" id="palDel"><span class="bgSw" style="border-style:dashed"></span>Delete color</button>
+  <button class="bgo" id="palReset"><span class="bgSw" style="background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red)"></span>Reset palette</button>
+</div>
 <input type="file" id="file" accept="image/*">
 <script>
 "use strict";
@@ -1225,13 +1234,14 @@ if (!TOOLS.some(t => t[0]===S.tool) || S.tool==='image' || S.tool==='paste') S.t
 if (!BGS.includes(S.bg)) S.bg = 'white';
 if (!FONTS[S.font]) S.font = 'sans';
 const isHex = c => typeof c==='string' && /^#[0-9a-f]{6}$/i.test(c);
-if (!Array.isArray(S.palette) || S.palette.length!==COLORS.length || !S.palette.every(isHex)) S.palette = COLORS.slice();
+const MAXPAL = 16;
+if (!Array.isArray(S.palette) || !S.palette.length || S.palette.length>MAXPAL || !S.palette.every(isHex)) S.palette = COLORS.slice();
 const save = () => { try { localStorage.setItem('inkcast.s', JSON.stringify(S)); } catch(e){} };
 
 let pages = {screen:[], board:[]}, page = 'screen', items = pages.screen;
 const HIST = {screen:{h:[], r:[]}, board:{h:[], r:[]}};
 let hist = HIST.screen.h, redoS = HIST.screen.r;
-let lasers = [], cur = null, pid = null, drag = null, erase = null, sel = [], marq = null;
+let lasers = [], cur = null, pid = null, drag = null, erase = null, sel = [], marq = null, lassoOut = null;
 let editor = null, downPt = null, sizeBefore = null, prevTool = 'pen', crect = null;
 let aspect = 16/9, sw = 1, sh = 1;
 const $ = id => document.getElementById(id);
@@ -1258,25 +1268,72 @@ for (const t of TOOLS) {
   };
   side.appendChild(b);
 }
-// palette: tap a color to use it; tap the selected color again to change it (remembered on this tablet)
-S.palette.forEach((c, i) => {
-  const b = document.createElement('div'); b.className='sw'; b.title='Tap again to change this color';
-  b.innerHTML = '<input type="color">';
-  const inp = b.firstChild;
-  b.onclick = e => {
-    if (e.target===inp) return;
-    setColor(S.palette[i]);
-    if (!S.palTip) { S.palTip = true; save(); toast('Tip: tap the selected color again to change it'); }
-  };
-  inp.oninput = e => { S.palette[i] = e.target.value.toLowerCase(); save(); paintPalette(); setColor(S.palette[i]); };
-  topBar.appendChild(b);
-});
-function paintPalette(){
-  document.querySelectorAll('.sw').forEach((b, i) => {
-    const c = S.palette[i]; b.style.background = c; b.dataset.c = c; b.firstChild.value = c;
+// palette: tap a color to use it; tap the selected color again to change or delete it; + adds one (remembered on this tablet)
+topBar.insertAdjacentHTML('beforeend',
+ '<div id="pal"></div><label id="addc" title="Add a color">+<input type="color" id="addpick"></label>');
+const pal = $('pal'), palMenu = $('palmenu');
+let palIdx = -1, addIdx = -1;
+function renderPalette(){
+  pal.innerHTML = '';
+  S.palette.forEach((c, i) => {
+    const b = document.createElement('div'); b.className='sw'; b.title='Tap again to change or delete this color';
+    b.onclick = () => {
+      if (S.color===S.palette[i]) { (palMenu.classList.contains('show') && palIdx===i) ? closePalMenu() : openPalMenu(i, b); return; }
+      closePalMenu(); setColor(S.palette[i]);
+      if (!S.palTip) { S.palTip = true; save(); toast('Tip: tap the selected color again to change or delete it'); }
+    };
+    pal.appendChild(b);
   });
+  $('addc').style.display = S.palette.length>=MAXPAL ? 'none' : '';
+  paintPalette();
 }
-paintPalette();
+function paintPalette(){
+  pal.querySelectorAll('.sw').forEach((b, i) => { const c = S.palette[i]; b.style.background = c; b.dataset.c = c; });
+}
+// one trip through the picker adds exactly one color (nothing if cancelled)
+$('addc').addEventListener('pointerdown', () => { addIdx = -1; $('addpick').value = S.color; });
+const addColor = v => {
+  if (!isHex(v)) return;
+  v = v.toLowerCase();
+  if (addIdx<0) {
+    if (S.palette.length>=MAXPAL) return;
+    S.palette.push(v); addIdx = S.palette.length-1; renderPalette();
+  } else { S.palette[addIdx] = v; paintPalette(); }
+  save(); setColor(v);
+};
+$('addpick').oninput = e => addColor(e.target.value);
+$('addpick').onchange = e => { addColor(e.target.value); addIdx = -1; };
+function placeMenu(m, anchor){
+  const r = anchor.getBoundingClientRect();
+  m.classList.add('show');
+  m.style.top = (r.bottom + 6) + 'px';
+  m.style.left = Math.max(8, Math.min(r.left, innerWidth - m.offsetWidth - 8)) + 'px';
+}
+function openPalMenu(i, b){
+  palIdx = i;
+  $('palpick').value = S.palette[i]; $('palSw').style.background = S.palette[i];
+  $('palDel').disabled = S.palette.length<=1;
+  placeMenu(palMenu, b);
+}
+function closePalMenu(){ palMenu.classList.remove('show'); }
+$('palpick').oninput = e => {
+  const v = e.target.value.toLowerCase();
+  if (palIdx<0 || !isHex(v)) return;
+  S.palette[palIdx] = v; save(); paintPalette(); $('palSw').style.background = v; setColor(v);
+};
+$('palDel').onclick = () => {
+  if (S.palette.length<=1) return;
+  const [gone] = S.palette.splice(palIdx, 1);
+  closePalMenu(); save(); renderPalette();
+  if (S.color===gone && !S.palette.includes(gone)) setColor(S.palette[Math.min(palIdx, S.palette.length-1)]);
+  else ui();
+};
+$('palReset').onclick = () => {
+  closePalMenu();
+  if (!confirm('Reset the palette to the original colors?')) return;
+  S.palette = COLORS.slice(); save(); renderPalette(); ui();
+};
+renderPalette();
 const tbtn = (icon,label,id) => '<button class="tb" id="'+id+'">'+svg(icon)+'<span>'+label+'</span></button>';
 topBar.insertAdjacentHTML('beforeend',
  '<label id="custom" title="Custom color"><input type="color" id="cpick"></label><div class="vsep"></div>'+
@@ -1310,23 +1367,21 @@ $('screenB').onclick = () => setPage('screen');
 const bgMenu = $('bgmenu');
 bgMenu.innerHTML = BGS.map(b => '<button class="bgo" data-bg="'+b+'"><span class="bgSw" style="background:'+bgCss(b)+'"></span>'+BGN[b]+'</button>').join('');
 bgMenu.querySelectorAll('.bgo').forEach(o => { o.onclick = () => { closeBgMenu(); setBoard(o.dataset.bg); }; });
-function openBgMenu(){
-  const r = $('boardB').getBoundingClientRect();
-  bgMenu.classList.add('show');
-  bgMenu.style.top = (r.bottom + 6) + 'px';
-  bgMenu.style.left = Math.max(8, Math.min(r.left, innerWidth - bgMenu.offsetWidth - 8)) + 'px';
-  ui();
-}
+function openBgMenu(){ closePalMenu(); placeMenu(bgMenu, $('boardB')); ui(); }
 function closeBgMenu(){ bgMenu.classList.remove('show'); }
 $('boardB').onclick = () => bgMenu.classList.contains('show') ? closeBgMenu() : openBgMenu();
-// a tap outside the menu only closes it (it doesn't draw)
+// a tap outside a menu only closes it (it doesn't draw)
 document.addEventListener('pointerdown', e => {
-  if (!bgMenu.classList.contains('show') || bgMenu.contains(e.target) || $('boardB').contains(e.target)) return;
-  closeBgMenu();
-  if (e.target===cv) { e.preventDefault(); e.stopPropagation(); }
+  let closed = false;
+  for (const [m, a] of [[bgMenu, $('boardB')], [palMenu, pal]]) {
+    if (!m.classList.contains('show') || m.contains(e.target) || a.contains(e.target)) continue;
+    m.classList.remove('show'); closed = true;
+  }
+  if (closed && e.target===cv) { e.preventDefault(); e.stopPropagation(); }
 }, true);
-$('top').addEventListener('scroll', closeBgMenu);
-addEventListener('resize', closeBgMenu);
+const closeMenus = () => { closeBgMenu(); closePalMenu(); };
+$('top').addEventListener('scroll', closeMenus);
+addEventListener('resize', closeMenus);
 $('liveB').onclick = () => { S.live = !S.live; save(); updBg(); ui(); reqFrame(); toast(S.live ? 'Live PC preview on' : 'Live PC preview off'); };
 $('fingB').onclick = () => {
   S.fingers = !S.fingers; S.fingersSet = true; save(); ui();
@@ -1389,7 +1444,7 @@ function ui(){
   if (S.tool==='text') h = 'Tap where you want text · tap a text to edit it';
   else if (S.tool==='select') h = sel.length
     ? (sel.length>1 ? sel.length+' selected · ' : '') + 'drag to move · corner dots to resize · tap a color, size or font to change it'
-    : 'Tap something, or drag a circle around things to select them';
+    : 'Tap something, or draw a loop around things to select them';
   else if (S.tool==='farrow') h = 'Draw a curved line — the arrow head goes where you lift the pen';
   $('hint').textContent = h;
 }
@@ -1554,10 +1609,12 @@ function drawSel(W, Hc){
   if (!sel.length || S.tool!=='select') return;
   const d = devicePixelRatio||1;
   ctx.save(); ctx.strokeStyle='#0a84ff'; ctx.lineWidth=1.5*d;
-  if (selKind()!=='ends') {
+  const ls = lassoOut && lassoOut.its.length===sel.length && sel.every(it => lassoOut.its.includes(it)) ? lassoOut : null;
+  if (ls) strokeLasso(ls.pts, W, Hc, true);   // the loop you drew stays around what it picked
+  else if (selKind()!=='ends') {
     const b = groupBox(sel); ctx.setLineDash([6*d,5*d]); ctx.strokeRect(b.x*W, b.y*Hc, b.w*W, b.h*Hc); ctx.setLineDash([]);
   }
-  if (sel.length > 1) {
+  if (sel.length > 1 && !ls) {
     ctx.globalAlpha = .45;
     for (const it of sel) { const b = bboxOf(it); ctx.strokeRect(b.x0*W, b.y0*Hc, (b.x1-b.x0)*W, (b.y1-b.y0)*Hc); }
     ctx.globalAlpha = 1;
@@ -1568,12 +1625,16 @@ function drawSel(W, Hc){
   ctx.restore();
 }
 function drawMarq(W, Hc){
-  if (!marq) return;
-  const d = devicePixelRatio||1, e = ellOf(marq);
-  if (e.rx <= 0 || e.ry <= 0) return;
-  ctx.save(); ctx.beginPath(); ctx.ellipse(e.cx*W, e.cy*Hc, e.rx*W, e.ry*Hc, 0, 0, Math.PI*2);
-  ctx.fillStyle='rgba(10,132,255,.10)'; ctx.fill();
-  ctx.setLineDash([7*d,6*d]); ctx.lineWidth=2*d; ctx.strokeStyle='#0a84ff'; ctx.stroke(); ctx.restore();
+  if (marq && marq.pts.length > 1) strokeLasso(marq.pts, W, Hc, false);   // open while drawing, like Noteful
+}
+// dashed blue lasso line; the ends are only joined once the pen lifts
+function strokeLasso(pts, W, Hc, close){
+  const d = devicePixelRatio||1;
+  ctx.save(); ctx.beginPath();
+  pts.forEach((q, i) => i ? ctx.lineTo(q[0]*W, q[1]*Hc) : ctx.moveTo(q[0]*W, q[1]*Hc));
+  if (close) ctx.closePath();
+  ctx.setLineDash([12*d,10*d]); ctx.lineWidth=2.5*d; ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.strokeStyle='#3b82f6'; ctx.stroke(); ctx.restore();
 }
 function geomOf(it){
   if (STROKE[it.k]) return {pts: it.pts.map(p => p.slice()), w: it.w};
@@ -1590,22 +1651,28 @@ function xfGeom(g, f, tx, ty){   // x' = f*x + tx, sizes * f  (same formula as t
   for (const k of ['w','h','fs','tw','th']) if (g[k] !== undefined) o[k] = g[k]*f;
   return o;
 }
-// selection circle: drawn corner to corner, like the Circle tool
-const ellOf = m => ({cx:(m.a[0]+m.b[0])/2, cy:(m.a[1]+m.b[1])/2, rx:Math.abs(m.b[0]-m.a[0])/2, ry:Math.abs(m.b[1]-m.a[1])/2});
+// lasso: a freehand loop; the ends are joined when the pen lifts
+function inPoly(q, P){
+  let c = false;
+  for (let i = 0, j = P.length-1; i < P.length; j = i++) {
+    const a = P[i], b = P[j];
+    if ((a[1] > q[1]) !== (b[1] > q[1]) && q[0] < (b[0]-a[0])*(q[1]-a[1])/(b[1]-a[1]) + a[0]) c = !c;
+  }
+  return c;
+}
 function keyPts(it){
   if (STROKE[it.k]) { const step = Math.max(1, Math.floor(it.pts.length/40)); return it.pts.filter((_,i) => i%step===0); }
   if (SHAPE[it.k]) return [it.a, it.b, [(it.a[0]+it.b[0])/2, (it.a[1]+it.b[1])/2]];
   const b = bboxOf(it); return [[b.x0,b.y0],[b.x1,b.y0],[b.x1,b.y1],[b.x0,b.y1],[(b.x0+b.x1)/2,(b.y0+b.y1)/2]];
 }
-function circleSelect(m){
-  const e = ellOf(m);
-  if (e.rx <= 0 || e.ry <= 0) return [];
-  const inside = q => ((q[0]-e.cx)/e.rx)**2 + ((q[1]-e.cy)/e.ry)**2 <= 1;
+function lassoSelect(poly){
+  if (poly.length < 3) return [];
+  const inside = q => inPoly(q, poly);
   return items.filter(it => {
     if (it.k==='text' || it.k==='img') { const b = bboxOf(it); return inside([(b.x0+b.x1)/2, (b.y0+b.y1)/2]); }
     const P = keyPts(it); let n = 0;
     for (const q of P) if (inside(q)) n++;
-    return n >= Math.max(1, P.length*0.5);   // at least half of a line/shape must be inside the circle
+    return n >= Math.max(1, P.length*0.5);   // at least half of a line/shape must be inside the loop
   });
 }
 function hitSelect(p){
@@ -1619,7 +1686,8 @@ function hitSelect(p){
   return null;
 }
 function startDrag(mode, p){
-  drag = {mode, p0:p, set:new Set(sel), o:new Map(sel.map(it => [it, geomOf(it)])), b0:groupBox(sel)};
+  drag = {mode, p0:p, set:new Set(sel), o:new Map(sel.map(it => [it, geomOf(it)])), b0:groupBox(sel),
+          lp: lassoOut && lassoOut.pts.map(q => q.slice())};
   send({t:'grab', ids: sel.map(it => it.id)}); baseDirty = true;
 }
 
@@ -1699,7 +1767,7 @@ function setPage(p){
   if (editor) commitEditor();
   if (cur) { send({t:'end', id:cur.id}); cur = null; }
   if (drag) { send({t:'end', ids:[...drag.set].map(it => it.id)}); drag = null; }
-  erase = null; pid = null; sel = []; marq = null;
+  erase = null; pid = null; sel = []; marq = null; lassoOut = null;
   const changed = p !== page;
   page = p; items = pages[p]; hist = HIST[p].h; redoS = HIST[p].r;
   send({t:'page', p, bg:S.bg});
@@ -1802,7 +1870,7 @@ cv.addEventListener('pointerdown', e => {
     if (hit) {
       if (hit.it && !sel.includes(hit.it)) sel = [hit.it];
       startDrag(hit.mode, p);
-    } else { sel = []; marq = {a:p, b:p}; }
+    } else { sel = []; marq = {pts:[p]}; }
   }
   flush(); needDraw = true; ui();
 });
@@ -1824,7 +1892,11 @@ cv.addEventListener('pointermove', e => {
   } else if (erase) {
     for (const ev of evs) eraseAt(pt(ev));
   } else if (marq) {
-    marq.b = pt(e); needDraw = true;
+    for (const ev of evs) {
+      const p = pt(ev), q = marq.pts[marq.pts.length-1];
+      if (p[0]!==q[0] || p[1]!==q[1]) marq.pts.push(p);
+    }
+    needDraw = true;
   } else if (drag) {
     const p = pt(e), m = drag.mode, dx = p[0]-drag.p0[0], dy = p[1]-drag.p0[1];
     if (m==='move' || m[0]==='g') {
@@ -1835,8 +1907,10 @@ cv.addEventListener('pointermove', e => {
         f = Math.max(0.05, d0 ? d1/d0 : 1); tx = an[0]*(1-f); ty = an[1]*(1-f);
       }
       for (const it of drag.set) Object.assign(it, xfGeom(drag.o.get(it), f, tx, ty));
+      if (lassoOut && drag.lp) lassoOut.pts = xfGeom({pts:drag.lp}, f, tx, ty).pts;   // the loop travels with them
       commit(); pend = {op:{t:'xf', ids:[...drag.set].map(it => it.id), f, tx, ty}};
     } else {
+      lassoOut = null;   // reshaping one line/box: its own handles take over
       const it = sel[0], o = drag.o.get(it);
       let g;
       if (m==='a' || m==='b') { g = {a:o.a.slice(), b:o.b.slice()}; g[m] = [rnd(o[m][0]+dx), rnd(o[m][1]+dy)]; }
@@ -1870,7 +1944,10 @@ function endPointer(e){
     erase = null;
   } else if (marq) {
     const m = marq; marq = null;
-    sel = Math.hypot((m.b[0]-m.a[0])*sw, (m.b[1]-m.a[1])*sh) > 12 ? circleSelect(m) : [];
+    let x0=Infinity, y0=Infinity, x1=-Infinity, y1=-Infinity;
+    for (const q of m.pts) { x0=Math.min(x0,q[0]); x1=Math.max(x1,q[0]); y0=Math.min(y0,q[1]); y1=Math.max(y1,q[1]); }
+    sel = Math.hypot((x1-x0)*sw, (y1-y0)*sh) > 12 ? lassoSelect(m.pts) : [];   // a tap or tiny scribble just clears
+    lassoOut = sel.length ? {pts:m.pts, its:sel.slice()} : null;
   } else if (drag) {
     const d = drag; drag = null;
     send({t:'end', ids:[...d.set].map(it => it.id)});
@@ -1961,8 +2038,8 @@ function applyH(h, back){
   } else if (h.a==='upd') h.its.forEach(o => setFields(o.it, back ? o.before : o.after));
   baseDirty = needDraw = true; ui();
 }
-function undo(){ if (editor) commitEditor(); const h = hist.pop(); if (h) { applyH(h, true); redoS.push(h); ui(); } }
-function redo(){ const h = redoS.pop(); if (h) { applyH(h, false); hist.push(h); ui(); } }
+function undo(){ if (editor) commitEditor(); const h = hist.pop(); if (h) { lassoOut = null; applyH(h, true); redoS.push(h); ui(); } }
+function redo(){ const h = redoS.pop(); if (h) { lassoOut = null; applyH(h, false); hist.push(h); ui(); } }
 function clearAll(){
   if (editor) commitEditor();
   if (!items.length) return;

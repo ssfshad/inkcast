@@ -28,8 +28,8 @@ No tablet app to install. No subscription. No account.
 - **Shapes:** line, arrow, **curved arrow**, box, circle
 - **Text** in three fonts (sans, handwriting, serif); tap existing text to edit it
 - **Images:** pick from your tablet, paste from the clipboard, drag and drop, or copy an image on the PC and press `Ctrl+Alt+V`
-- **Select:** tap one thing, or drag a circle around several. Then move them, resize them from the corner dots, or change their color, size or font together
-- **Colors:** ten quick colors plus a full color picker. Tap the selected color again to swap it for any color you like; your palette is remembered
+- **Select:** tap one thing, or draw a loop around several (the ends join up automatically, so a rough curve is enough). Then move them, resize them from the corner dots, or change their color, size or font together
+- **Colors:** a palette of quick colors plus a full color picker. Tap **+** to add a color, or tap the selected color again to change or delete it (up to 16 colors); your palette is remembered
 - **Whiteboard:** tap **Board** and pick a white, grid, black or green chalkboard board; each keeps its own drawings
 - **Undo / redo, eraser, clear**
 - **Works with fingers or a pencil.** When a pencil is detected, fingers stop drawing automatically so your palm can rest on the screen (toggle with **Fingers**)
