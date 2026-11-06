@@ -35,6 +35,9 @@ No tablet app to install. No subscription. No account.
 - **Works with fingers or a pencil.** When a pencil is detected, fingers stop drawing automatically so your palm can rest on the screen (toggle with **Fingers**)
 - **Live screen preview** on the tablet so you can see where you're drawing
 - **PC keyboard shortcuts** so you can control it without touching the tablet
+- **Presentation remote:** **Prev** and **Next** buttons on the tablet/phone to navigate PowerPoint, Google Slides, and PDF presentations
+- **Fullscreen button:** one tap to enter full-screen mode on mobile browsers
+- **Remote control anywhere (Cloudflare Tunnel):** annotate and navigate slides remotely over cellular data or from outside your home/office network (`Start Cloudflare Tunnel.bat`)
 - **Phone camera over USB:** use your Android phone as a face cam or document cam, with no app on the phone ([details](#use-your-android-phone-as-a-camera-usb-no-app))
 
 | Circle to select | Edit many things at once |
@@ -77,7 +80,14 @@ No tablet app to install. No subscription. No account.
 
 Open the `inkcast-main` folder and double-click **`Start InkCast.bat`**. No terminal needed.
 
-> **Tip:** add the page to your tablet's home screen (Safari: **Share → Add to Home Screen**; Chrome: **⋮ → Add to Home screen**) so it opens full screen like an app.
+> **Tip:** add the page to your tablet's home screen (Safari: **Share → Add to Home Screen**; Chrome: **⋮ → Add to Home screen**) so it opens full screen like an app, or tap the **Full** button in the top bar.
+
+### Remote control over the internet (Cloudflare Tunnel)
+
+To control PowerPoint and draw on your screen from outside your WiFi (e.g. over 4G/5G cellular data):
+1. Start InkCast with **`Start InkCast.bat`**.
+2. Double-click **`Start Cloudflare Tunnel.bat`**.
+3. Open the generated `https://...trycloudflare.com` link on your phone or tablet.
 
 ### Troubleshooting
 

@@ -27,9 +27,21 @@ from aiohttp import web
 from PySide6.QtCore import Qt, QObject, Signal, QPointF, QRectF, QTimer, QBuffer, QByteArray, QIODevice
 from PySide6.QtGui import (QAction, QColor, QFont, QGuiApplication, QIcon, QImage, QPainter,
                            QPainterPath, QPen, QPixmap, QPolygonF, QRegion)
-from PySide6.QtWidgets import QApplication, QLabel, QMenu, QSystemTrayIcon, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMenu, QPushButton,
+                               QSystemTrayIcon, QVBoxLayout, QWidget)
 
 APP = "InkCast"
+
+
+def resource_dir():
+    """Folder containing files shipped next to the executable.
+    A standalone build keeps the camera helper writable beside InkCast.exe.
+    """
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return os.path.dirname(os.path.abspath(__file__))
+
+
 PORT = int(os.environ.get("INKCAST_PORT", "8765"))
 REF = 1920.0                      # sizes are defined relative to a 1920px-wide screen
 STROKES = {"pen", "marker", "hl", "neon", "laser", "farrow"}
@@ -719,6 +731,10 @@ class Server:
         self.apply(op)
         self.bridge.ops.emit(json.dumps(op))
 
+    def slide(self, direction):
+        if direction in ("next", "prev"):
+            self.loop.run_in_executor(self.exec, trigger_slide, direction)
+
     # ---- http / websocket
     async def index(self, _request):
         return web.Response(text=PAGE, content_type="text/html",
@@ -761,6 +777,9 @@ class Server:
                 try:
                     d = json.loads(m.data)
                 except ValueError:
+                    continue
+                if d.get("t") == "slide":
+                    self.slide(d.get("dir", "next"))
                     continue
                 if d.get("t") == "fetch":
                     url = str(d.get("url", ""))
@@ -849,6 +868,35 @@ def start_hotkeys(emit):
     return failed
 
 
+def trigger_slide(direction: str):
+    """Trigger slide advance / back.
+    Works with PowerPoint (full screen or window) and any active presentation app.
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        hwnd = user32.FindWindowW("screenClass", None)
+        if not hwnd:
+            hwnd = user32.FindWindowW("PPTFrameClass", None)
+        if hwnd:
+            try:
+                user32.SetForegroundWindow(hwnd)
+            except Exception:
+                pass
+            time.sleep(0.02)
+        # Page Down (0x22) for next, Page Up (0x21) for previous
+        vk = 0x22 if direction == "next" else 0x21
+        KEYEVENTF_KEYUP = 0x0002
+        KEYEVENTF_EXTENDEDKEY = 0x0001
+        user32.keybd_event(vk, 0, KEYEVENTF_EXTENDEDKEY, 0)
+        time.sleep(0.02)
+        user32.keybd_event(vk, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0)
+    except Exception as e:
+        print(f"Slide trigger error: {e}")
+
+
 # --------------------------------------------------------------------------- startup
 
 def all_ips():
@@ -914,16 +962,146 @@ def qr_pixmap(text, module=7):
     return pm
 
 
+def get_cloudflared_install_path():
+    """Returns a writable path for cloudflared.exe."""
+    rdir = resource_dir()
+    try:
+        test_file = os.path.join(rdir, ".write_test")
+        with open(test_file, "w") as f:
+            f.write("1")
+        os.remove(test_file)
+        return os.path.join(rdir, "cloudflared.exe")
+    except Exception:
+        target_dir = os.path.expandvars(r"%LOCALAPPDATA%\InkCast")
+        os.makedirs(target_dir, exist_ok=True)
+        return os.path.join(target_dir, "cloudflared.exe")
+
+
+class TunnelManager(QObject):
+    started = Signal(str)        # remote_url
+    stopped = Signal()
+    error = Signal(str)
+    status_changed = Signal(str) # "starting", "downloading", "running", "stopped"
+
+    def __init__(self, port):
+        super().__init__()
+        self.port = port
+        self.proc = None
+        self.remote_url = None
+        self.status = "stopped"
+
+    def find_cloudflared(self):
+        import shutil
+        p = shutil.which("cloudflared")
+        if p:
+            return p
+        beside = os.path.join(resource_dir(), "cloudflared.exe")
+        if os.path.isfile(beside):
+            return beside
+        for candidate in [
+            os.path.expandvars(r"%LOCALAPPDATA%\InkCast\cloudflared.exe"),
+            os.path.expandvars(r"%ProgramFiles(x86)%\cloudflared\cloudflared.exe"),
+            os.path.expandvars(r"%ProgramFiles%\cloudflared\cloudflared.exe"),
+        ]:
+            if os.path.isfile(candidate):
+                return candidate
+        return None
+
+    def start(self):
+        if self.proc and self.proc.poll() is None:
+            return
+        self.status = "starting"
+        self.status_changed.emit("starting")
+
+        def run():
+            exe = self.find_cloudflared()
+            if not exe:
+                self.status = "downloading"
+                self.status_changed.emit("downloading")
+                target_exe = get_cloudflared_install_path()
+                try:
+                    import urllib.request
+                    url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
+                    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                    with urllib.request.urlopen(req, timeout=60) as resp, open(target_exe, "wb") as out:
+                        while True:
+                            chunk = resp.read(65536)
+                            if not chunk:
+                                break
+                            out.write(chunk)
+                    exe = target_exe
+                except Exception as e:
+                    self.status = "stopped"
+                    self.status_changed.emit("stopped")
+                    self.error.emit(f"Could not download cloudflared: {e}")
+                    return
+
+            try:
+                import re, subprocess
+                creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                self.proc = subprocess.Popen(
+                    [exe, "tunnel", "--url", f"http://127.0.0.1:{self.port}"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                    creationflags=creation_flags
+                )
+                found = False
+                for line in self.proc.stdout:
+                    m = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", line)
+                    if m:
+                        self.remote_url = m.group(0)
+                        self.status = "running"
+                        self.status_changed.emit("running")
+                        self.started.emit(self.remote_url)
+                        found = True
+                        break
+                if not found and self.proc.poll() is not None:
+                    self.status = "stopped"
+                    self.status_changed.emit("stopped")
+                    self.error.emit("Tunnel process exited without URL")
+            except Exception as e:
+                self.status = "stopped"
+                self.status_changed.emit("stopped")
+                self.error.emit(str(e))
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def stop(self):
+        if self.proc and self.proc.poll() is None:
+            try:
+                self.proc.terminate()
+                self.proc.wait(timeout=2)
+            except Exception:
+                try:
+                    self.proc.kill()
+                except Exception:
+                    pass
+        self.proc = None
+        self.remote_url = None
+        self.status = "stopped"
+        self.stopped.emit()
+        self.status_changed.emit("stopped")
+
+
 class ConnectWindow(QWidget):
     """Shows the tablet address as a QR code and as text to type."""
-    def __init__(self, url):
+    def __init__(self, url, tunnel_mgr=None):
         super().__init__(None, Qt.Window | Qt.WindowStaysOnTopHint)
+        self.local_url = url
+        self.remote_url = None
+        self.current_url = url
+        self.tunnel_mgr = tunnel_mgr
         self.setWindowTitle(f"{APP} - connect your tablet")
         self.setWindowIcon(tray_icon())
         self.setStyleSheet("QWidget{background:#1c1c1e;color:#f2f2f7;font-family:'Segoe UI'}"
                            "#qr{background:#fff;border-radius:12px;padding:10px}"
-                           "#url{font-size:24px;font-weight:700;color:#fff}"
-                           "#mut{color:#8e8e93;font-size:13px}")
+                           "#url{font-size:20px;font-weight:700;color:#fff}"
+                           "#mut{color:#8e8e93;font-size:13px}"
+                           "QPushButton{background:#2c2c2e;color:#f2f2f7;border:1px solid #3a3a3c;"
+                           "border-radius:8px;padding:6px 14px;font-size:13px;font-weight:600}"
+                           "QPushButton:hover{background:#3a3a3c}")
         lay = QVBoxLayout(self)
         lay.setContentsMargins(28, 22, 28, 22)
         lay.setSpacing(10)
@@ -940,25 +1118,108 @@ class ConnectWindow(QWidget):
             return w
 
         pm = qr_pixmap(url)
+        self.title_label = label(
+            "Scan with your tablet's camera" if pm is not None else "Type this into the tablet's browser:",
+            size=17,
+        )
         if pm is not None:
-            label("Scan with your tablet's camera", size=17)
-            qr = QLabel()
-            qr.setObjectName("qr")
-            qr.setPixmap(pm)
-            qr.setAlignment(Qt.AlignCenter)
-            lay.addWidget(qr, 0, Qt.AlignCenter)
-            label("or type this into the tablet's browser:", "mut")
-        else:
-            label("Type this into your tablet's browser:", size=17)
-        u = label(url, "url")
-        u.setWordWrap(False)
-        u.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        label("The tablet must be on the same WiFi as this PC.\n"
-              "This window closes when your tablet connects.\n"
-              "Open it again from the tray icon.", "mut")
-        self.setMinimumWidth(380)
+            self.qr_label = QLabel()
+            self.qr_label.setObjectName("qr")
+            self.qr_label.setPixmap(pm)
+            self.qr_label.setAlignment(Qt.AlignCenter)
+            lay.addWidget(self.qr_label, 0, Qt.AlignCenter)
+
+        self.sub_label = label("or type this into the tablet's browser:", "mut")
+        self.url_label = label(url, "url")
+        self.url_label.setWordWrap(False)
+        self.url_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+
+        btn_box = QWidget()
+        btn_lay = QHBoxLayout(btn_box)
+        btn_lay.setContentsMargins(0, 4, 0, 4)
+        btn_lay.setSpacing(8)
+
+        self.copy_btn = QPushButton("Copy Link")
+        self.copy_btn.clicked.connect(self.copy_current_url)
+        btn_lay.addWidget(self.copy_btn)
+
+        self.toggle_btn = QPushButton("Start Remote Tunnel")
+        self.toggle_btn.clicked.connect(self.toggle_tunnel_mode)
+        btn_lay.addWidget(self.toggle_btn)
+
+        lay.addWidget(btn_box)
+
+        self.hint_label = label(
+            "The tablet must be on the same WiFi as this PC (or use Remote Tunnel).\n"
+            "This window closes when your tablet connects.\n"
+            "Open it again from the tray icon.", "mut")
+        self.setMinimumWidth(400)
         self.adjustSize()
         self.setFixedSize(self.size())
+
+        if self.tunnel_mgr:
+            self.tunnel_mgr.started.connect(self.on_tunnel_started)
+            self.tunnel_mgr.stopped.connect(self.on_tunnel_stopped)
+            self.tunnel_mgr.status_changed.connect(self.on_tunnel_status)
+
+    def copy_current_url(self):
+        QGuiApplication.clipboard().setText(self.current_url)
+        self.copy_btn.setText("Copied!")
+        QTimer.singleShot(1500, lambda: self.copy_btn.setText("Copy Link"))
+
+    def toggle_tunnel_mode(self):
+        if not self.tunnel_mgr:
+            return
+        if self.remote_url:
+            if self.current_url == self.remote_url:
+                self.show_url(self.local_url, is_remote=False)
+            else:
+                self.show_url(self.remote_url, is_remote=True)
+        else:
+            self.toggle_btn.setEnabled(False)
+            self.toggle_btn.setText("Starting Tunnel...")
+            self.tunnel_mgr.start()
+
+    def show_url(self, target_url, is_remote=False):
+        self.current_url = target_url
+        self.url_label.setText(target_url)
+        pm = qr_pixmap(target_url)
+        if pm is not None and self.qr_label is not None:
+            self.qr_label.setPixmap(pm)
+        if is_remote:
+            self.title_label.setText("Scan for Remote Access (Anywhere)")
+            self.sub_label.setText("Works over mobile data or any Wi-Fi network.")
+            self.toggle_btn.setText("Switch to Local Wi-Fi QR")
+            self.toggle_btn.setEnabled(True)
+        else:
+            self.title_label.setText("Scan with your tablet's camera")
+            self.sub_label.setText("The tablet must be on the same WiFi as this PC.")
+            if self.remote_url:
+                self.toggle_btn.setText("Switch to Cloudflare Remote QR")
+                self.toggle_btn.setEnabled(True)
+            else:
+                self.toggle_btn.setText("Start Remote Tunnel")
+                self.toggle_btn.setEnabled(True)
+
+    def on_tunnel_started(self, remote_url):
+        self.remote_url = remote_url
+        self.show_url(remote_url, is_remote=True)
+
+    def on_tunnel_stopped(self):
+        self.remote_url = None
+        self.show_url(self.local_url, is_remote=False)
+
+    def on_tunnel_status(self, status):
+        if status == "starting":
+            self.toggle_btn.setEnabled(False)
+            self.toggle_btn.setText("Starting Tunnel...")
+        elif status == "downloading":
+            self.toggle_btn.setEnabled(False)
+            self.toggle_btn.setText("Downloading cloudflared...")
+        elif status == "stopped":
+            if not self.remote_url:
+                self.toggle_btn.setEnabled(True)
+                self.toggle_btn.setText("Start Remote Tunnel")
 
     def show_centered(self):
         self.move(QGuiApplication.primaryScreen().availableGeometry().center() - self.rect().center())
@@ -1009,12 +1270,65 @@ def main():
             return
         tray.showMessage(APP, "No image in the clipboard. Right-click an image and choose Copy image first.")
 
-    connect_win = ConnectWindow(url)
+    tunnel_mgr = TunnelManager(PORT)
+    connect_win = ConnectWindow(url, tunnel_mgr)
     bridge.tablet.connect(connect_win.hide)
 
     menu = QMenu()
     info = QAction(f"Connect a tablet (QR code)...\t{url}")
     info.triggered.connect(connect_win.show_centered)
+    tunnel_start = QAction("Start Cloudflare Tunnel...")
+    tunnel_copy = QAction("Copy Cloudflare Link")
+    tunnel_stop = QAction("Stop Cloudflare Tunnel")
+    tunnel_copy.setVisible(False)
+    tunnel_stop.setVisible(False)
+
+    def on_start_tunnel():
+        tunnel_start.setEnabled(False)
+        tunnel_start.setText("Starting Cloudflare Tunnel...")
+        tunnel_mgr.start()
+
+    def on_copy_tunnel():
+        if tunnel_mgr.remote_url:
+            QGuiApplication.clipboard().setText(tunnel_mgr.remote_url)
+            tray.showMessage(APP, "Copied Cloudflare remote link to clipboard!")
+
+    tunnel_start.triggered.connect(on_start_tunnel)
+    tunnel_stop.triggered.connect(tunnel_mgr.stop)
+    tunnel_copy.triggered.connect(on_copy_tunnel)
+
+    def on_tunnel_status(status):
+        if status == "starting":
+            tunnel_start.setEnabled(False)
+            tunnel_start.setText("Starting Cloudflare Tunnel...")
+        elif status == "downloading":
+            tunnel_start.setEnabled(False)
+            tunnel_start.setText("Downloading cloudflared (~20MB)...")
+        elif status == "running":
+            tunnel_start.setVisible(False)
+            tunnel_copy.setText(f"Copy Cloudflare Link\t{tunnel_mgr.remote_url}")
+            tunnel_copy.setVisible(True)
+            tunnel_stop.setVisible(True)
+        elif status == "stopped":
+            tunnel_start.setEnabled(True)
+            tunnel_start.setText("Start Cloudflare Tunnel...")
+            tunnel_start.setVisible(True)
+            tunnel_copy.setVisible(False)
+            tunnel_stop.setVisible(False)
+
+    def on_tunnel_started(remote_url):
+        tray.showMessage(APP, f"Cloudflare Tunnel active!\nLink copied to clipboard:\n{remote_url}")
+        QGuiApplication.clipboard().setText(remote_url)
+        tray.setToolTip(f"{APP}\nWiFi: {url}\nRemote: {remote_url}")
+
+    def on_tunnel_error(err):
+        tray.showMessage(APP, f"Cloudflare Tunnel: {err}")
+
+    tunnel_mgr.status_changed.connect(on_tunnel_status)
+    tunnel_mgr.started.connect(on_tunnel_started)
+    tunnel_mgr.error.connect(on_tunnel_error)
+    app.aboutToQuit.connect(tunnel_mgr.stop)
+
     clear = QAction("Clear ink\tCtrl+Alt+C")
     clear.triggered.connect(lambda: server.command("clear"))
     board = QAction("Whiteboard on / off\tCtrl+Alt+W")
@@ -1028,7 +1342,7 @@ def main():
         toggle.setText(("Hide ink" if overlay.isVisible() else "Show ink") + "\tCtrl+Alt+H")
 
     toggle.triggered.connect(toggle_ink)
-    cam_bat = os.path.join(os.path.dirname(os.path.abspath(__file__)), "camera", "InkCast Camera.bat")
+    cam_bat = os.path.join(resource_dir(), "camera", "InkCast Camera.bat")
     camera = QAction("Phone camera (USB)...")
 
     def start_camera():
@@ -1042,6 +1356,10 @@ def main():
     quit_ = QAction(f"Quit {APP}")
     quit_.triggered.connect(app.quit)
     menu.addAction(info)
+    menu.addSeparator()
+    menu.addAction(tunnel_start)
+    menu.addAction(tunnel_copy)
+    menu.addAction(tunnel_stop)
     menu.addSeparator()
     for a in (paste, clear, board, toggle):
         menu.addAction(a)
@@ -1082,6 +1400,7 @@ def main():
         print(f"     Ctrl+Alt+{key}   {label}{mark}")
     print()
     print("  Tablet and PC must be on the same WiFi / network.")
+    print("  (Or use Cloudflare Tunnel to connect remotely from anywhere: 'Start Cloudflare Tunnel.bat')")
     print("  If Windows asks about the firewall, click Allow.")
     print("  Close this window or press Ctrl+C to quit.")
     print("=" * 62)
@@ -1206,7 +1525,11 @@ const I = {
  screen:'<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/>',
  board:'<rect x="3" y="4" width="18" height="13" rx="1"/><path d="M8 21l4-4 4 4"/>',
  eye:'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
- hand:'<path d="M8 13V5a1.5 1.5 0 0 1 3 0v6M11 11V4a1.5 1.5 0 0 1 3 0v7M14 11V5.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-1a6 6 0 0 1-5-3l-2-4a1.5 1.5 0 0 1 2.5-1.5L8 15"/>'
+ hand:'<path d="M8 13V5a1.5 1.5 0 0 1 3 0v6M11 11V4a1.5 1.5 0 0 1 3 0v7M14 11V5.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-1a6 6 0 0 1-5-3l-2-4a1.5 1.5 0 0 1 2.5-1.5L8 15"/>',
+ prev:'<path d="M15 18l-6-6 6-6"/>',
+ next:'<path d="M9 18l6-6-6-6"/>',
+ full:'<path d="M3 8V5a2 2 0 0 1 2-2h3m11 0h3a2 2 0 0 1 2 2v3m0 8v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/>',
+ exitfull:'<path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>'
 };
 const svg = n => '<svg viewBox="0 0 24 24">'+I[n]+'</svg>';
 const TOOLS = [['pen','Pen'],['marker','Marker'],['hl','Highlight'],['neon','Neon'],['laser','Laser'],'|',
@@ -1341,7 +1664,8 @@ topBar.insertAdjacentHTML('beforeend',
  '<div id="fonts"><div class="vsep"></div><button class="fb" data-f="sans">Aa</button><button class="fb" data-f="hand">Aa</button><button class="fb" data-f="serif">Aa</button></div>'+
  '<div class="vsep"></div>'+tbtn('undo','Undo','undo')+tbtn('redo','Redo','redo')+tbtn('trash','Clear','clear')+tbtn('del','Delete','delB')+
  '<div class="vsep"></div>'+tbtn('screen','Screen','screenB')+tbtn('board','Board','boardB')+
- '<div class="vsep"></div>'+tbtn('eye','Preview','liveB')+tbtn('hand','Fingers','fingB')+
+ '<div class="vsep"></div>'+tbtn('prev','Prev','prevB')+tbtn('next','Next','nextB')+
+ '<div class="vsep"></div>'+tbtn('eye','Preview','liveB')+tbtn('hand','Fingers','fingB')+tbtn('full','Full','fullB')+
  '<div id="status"><span id="led"></span><span id="stxt">Connecting</span></div>');
 document.querySelectorAll('.fb').forEach(b => { b.style.font = fontOf(b.dataset.f, 16); b.onclick = () => setFont(b.dataset.f); });
 $('cpick').oninput = e => setColor(e.target.value);
@@ -1363,6 +1687,46 @@ $('size').onchange = () => {
 };
 $('undo').onclick = undo; $('redo').onclick = redo; $('clear').onclick = clearAll; $('delB').onclick = deleteSel;
 $('screenB').onclick = () => setPage('screen');
+$('prevB').onclick = () => sendSlide('prev');
+$('nextB').onclick = () => sendSlide('next');
+function sendSlide(dir){
+  if (!connected) { toast('Offline: cannot change slide'); return; }
+  sendNow({t:'slide', dir});
+  toast(dir==='next' ? 'Next Slide ▶' : '◀ Prev Slide');
+}
+function isFullscreen(){
+  return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+}
+function updateFsUI(){
+  const fs = isFullscreen();
+  const btn = $('fullB');
+  if (!btn) return;
+  btn.classList.toggle('on', fs);
+  btn.innerHTML = svg(fs ? 'exitfull' : 'full') + '<span>' + (fs ? 'Exit' : 'Full') + '</span>';
+}
+function toggleFullscreen(){
+  const doc = document;
+  const docEl = document.documentElement;
+  if (!isFullscreen()) {
+    const req = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
+    if (req) {
+      Promise.resolve(req.call(docEl)).then(() => { updateFsUI(); layout(); }).catch(e => {
+        toast('Tip: Add to Home Screen for fullscreen view');
+      });
+    } else {
+      toast('Tip: Add to Home Screen for fullscreen view');
+    }
+  } else {
+    const exit = doc.exitFullscreen || doc.webkitExitFullscreen || doc.mozCancelFullScreen || doc.msExitFullscreen;
+    if (exit) {
+      Promise.resolve(exit.call(doc)).then(() => { updateFsUI(); layout(); }).catch(e => console.warn(e));
+    }
+  }
+}
+$('fullB').onclick = toggleFullscreen;
+['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(evt => {
+  document.addEventListener(evt, () => { updateFsUI(); layout(); });
+});
 // Board opens a menu of whiteboards
 const bgMenu = $('bgmenu');
 bgMenu.innerHTML = BGS.map(b => '<button class="bgo" data-bg="'+b+'"><span class="bgSw" style="background:'+bgCss(b)+'"></span>'+BGN[b]+'</button>').join('');
@@ -1735,7 +2099,8 @@ function runCmd(m){
   else if (c==='img' && m.src) addImageSrc(m.src);
 }
 function connect(){
-  ws = new WebSocket('ws://' + location.host + '/ws');
+  const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+  ws = new WebSocket(proto + location.host + '/ws');
   ws.binaryType = 'blob';
   ws.onopen = () => { connected = true; setStatus(true, 'Live'); flush(); };
   ws.onclose = () => { connected = false; frameWaiting = false; setStatus(false, 'Offline'); setTimeout(connect, 1000); };
