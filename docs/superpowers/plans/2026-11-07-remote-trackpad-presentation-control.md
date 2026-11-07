@@ -1,6 +1,6 @@
 # Remote Trackpad & Presentation Controller Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add a remote trackpad and presentation slide controller mode to InkCast, allowing tablets/smartphones to control the Windows host cursor and slides with strict PIN security for remote tunnel sessions.
 
@@ -32,7 +32,7 @@
   - Win32 structures: `MOUSEINPUT`, `INPUT_UNION`, `INPUT`
   - Event constants: `INPUT_MOUSE`, `MOUSEEVENTF_MOVE`, `MOUSEEVENTF_ABSOLUTE`, `MOUSEEVENTF_LEFTDOWN`, `MOUSEEVENTF_LEFTUP`, `MOUSEEVENTF_RIGHTDOWN`, `MOUSEEVENTF_RIGHTUP`, `MOUSEEVENTF_WHEEL`
 
-- [ ] **Step 1: Write the failing unit tests for input structures and event translation**
+- [x] **Step 1: Write the failing unit tests for input structures and event translation**
 
 Create `tests/test_input.py`:
 ```python
@@ -64,12 +64,12 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m unittest tests/test_input.py -v`  
 Expected: FAIL with `AttributeError: module 'inkcast' has no attribute 'MOUSEINPUT'`
 
-- [ ] **Step 3: Implement Win32 SendInput structures and InputExecutor in `inkcast.py`**
+- [x] **Step 3: Implement Win32 SendInput structures and InputExecutor in `inkcast.py`**
 
 In `inkcast.py`, right after imports (~line 40):
 ```python
@@ -161,12 +161,12 @@ class InputExecutor:
         self.executor.shutdown(wait=False)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m unittest tests/test_input.py -v`  
 Expected: PASS with 1 test ok.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/test_input.py inkcast.py
@@ -195,7 +195,7 @@ git commit -m "feat(mouse): add Win32 SendInput structures and single-threaded I
     - `revoke_tokens() -> None`
     - `set_pin(pin: str) -> None`
 
-- [ ] **Step 1: Write the failing unit tests for AuthManager and RemoteGate**
+- [x] **Step 1: Write the failing unit tests for AuthManager and RemoteGate**
 
 Create `tests/test_auth.py`:
 ```python
@@ -263,12 +263,12 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m unittest tests/test_auth.py -v`  
 Expected: FAIL with `ImportError: cannot import name 'AuthManager' from 'inkcast'`
 
-- [ ] **Step 3: Implement SettingsManager, is_remote_request, and AuthManager in `inkcast.py`**
+- [x] **Step 3: Implement SettingsManager, is_remote_request, and AuthManager in `inkcast.py`**
 
 In `inkcast.py`:
 ```python
@@ -374,12 +374,12 @@ class AuthManager:
             return False, "Incorrect PIN."
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m unittest tests/test_auth.py -v`  
 Expected: PASS with 3 tests ok.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/test_auth.py inkcast.py
@@ -403,7 +403,7 @@ git commit -m "feat(auth): implement settings persistence, remote gate, and PIN 
   - Broadcast of `{"t": "mouse_state", "enabled": bool}` on toggle
   - Server frame cursor notification: `{"t": "cur", "x": float, "y": float}`
 
-- [ ] **Step 1: Write test for cursor position retrieval and normalization**
+- [x] **Step 1: Write test for cursor position retrieval and normalization**
 
 Create `tests/test_cursor.py`:
 ```python
@@ -429,12 +429,12 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m unittest tests/test_cursor.py -v`  
 Expected: FAIL with `AttributeError: module 'inkcast' has no attribute 'get_normalized_cursor'`
 
-- [ ] **Step 3: Implement `get_normalized_cursor` and Tray actions in `inkcast.py`**
+- [x] **Step 3: Implement `get_normalized_cursor` and Tray actions in `inkcast.py`**
 
 In `inkcast.py`:
 ```python
@@ -471,12 +471,12 @@ In `main()` (~line 1300):
   # send {"t": "cur", "x": cur_x, "y": cur_y}
   ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m unittest tests/test_cursor.py -v`  
 Expected: PASS with 1 test ok.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/test_cursor.py inkcast.py
@@ -500,7 +500,7 @@ git commit -m "feat(tray): add remote mouse toggle and PIN config actions, plus 
     - `{"t": "auth", "token": "..."}` -> validates token, responds with `auth_ok` or `auth_err`
     - `{"t": "mouse", "action": ...}` -> validated against session auth and `mouse_enabled` killswitch, dispatches to `input_executor`
 
-- [ ] **Step 1: Write protocol unit/integration test**
+- [x] **Step 1: Write protocol unit/integration test**
 
 Create `tests/test_ws_protocol.py`:
 ```python
@@ -536,12 +536,12 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m unittest tests/test_ws_protocol.py -v`  
 Expected: FAIL with `AttributeError: 'Server' object has no attribute 'handle_mouse_msg'`
 
-- [ ] **Step 3: Implement protocol handling in `Server` and `ws_handler`**
+- [x] **Step 3: Implement protocol handling in `Server` and `ws_handler`**
 
 In `inkcast.py`:
 - Initialize in `Server.__init__`:
@@ -620,12 +620,12 @@ In `inkcast.py`:
         continue
     ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m unittest tests/test_ws_protocol.py -v`  
 Expected: PASS with 1 test ok.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/test_ws_protocol.py inkcast.py
@@ -647,7 +647,7 @@ git commit -m "feat(server): integrate auth and mouse protocol handling into Web
   - Cursor ring element `#cur-ring`
   - Touch event listeners on `#stage` handling 1-finger move, 1-finger tap, 2-finger tap, 2-finger scroll
 
-- [ ] **Step 1: Add Trackpad SVG icon and tool entry**
+- [x] **Step 1: Add Trackpad SVG icon and tool entry**
 
 In `PAGE` string in `inkcast.py`:
 - In `const I = { ... }`:
@@ -660,7 +660,7 @@ In `PAGE` string in `inkcast.py`:
   `if (t !== 'laser' && t !== 'trackpad') prevTool = t;`
   In reload tool reset: include `'trackpad'` in tools that reset to `'pen'`.
 
-- [ ] **Step 2: Add Cursor Feedback Ring markup & CSS**
+- [x] **Step 2: Add Cursor Feedback Ring markup & CSS**
 
 In `PAGE` HTML:
 ```html
@@ -680,7 +680,7 @@ if (d.t === 'cur' && S.tool === 'trackpad') {
 }
 ```
 
-- [ ] **Step 3: Implement Raw Touch Gesture Engine with 60fps coalescing**
+- [x] **Step 3: Implement Raw Touch Gesture Engine with 60fps coalescing**
 
 In `PAGE` script:
 ```javascript
@@ -773,12 +773,12 @@ stage.addEventListener('touchend', e => {
 });
 ```
 
-- [ ] **Step 4: Verify syntax and compile check**
+- [x] **Step 4: Verify syntax and compile check**
 
 Run: `python -m py_compile inkcast.py`  
 Expected: Exit code 0 without syntax errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add inkcast.py
@@ -801,7 +801,7 @@ git commit -m "feat(client): implement trackpad tool, touch gestures, and cursor
   - Minimize toggle to `[ 🖱️ ]` floating pill
   - `#pinmodal` 6-digit PIN input dialog with touch keypad
 
-- [ ] **Step 1: Add HUD and PIN Modal HTML markup and styles**
+- [x] **Step 1: Add HUD and PIN Modal HTML markup and styles**
 
 In `PAGE` HTML:
 ```html
@@ -851,7 +851,7 @@ Add CSS for `#hud` and `#pinmodal`:
 .modal-btn-sec { flex:1; background:#3a3a3c; border:none; padding:10px; border-radius:8px; color:#fff; cursor:pointer; }
 ```
 
-- [ ] **Step 2: Implement HUD interaction and slide controls**
+- [x] **Step 2: Implement HUD interaction and slide controls**
 
 In `PAGE` script:
 - Wire HUD buttons:
@@ -884,7 +884,7 @@ In `PAGE` script:
     };
     ```
 
-- [ ] **Step 3: Implement PIN Modal, Token Handling, and Auth Flow**
+- [x] **Step 3: Implement PIN Modal, Token Handling, and Auth Flow**
 
 In `PAGE` script:
 ```javascript
@@ -928,12 +928,12 @@ if (tool === 'trackpad') {
 }
 ```
 
-- [ ] **Step 4: Verify syntax and compile check**
+- [x] **Step 4: Verify syntax and compile check**
 
 Run: `python -m py_compile inkcast.py`  
 Expected: Exit code 0 without syntax errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add inkcast.py
@@ -951,7 +951,7 @@ git commit -m "feat(ui): add floating HUD, minimize pill, slide buttons, and PIN
 - Consumes: Running server on `127.0.0.1:8765`, WebSocket client
 - Produces: Complete verification report for move, click, PIN auth, rate limiting, and tray killswitch
 
-- [ ] **Step 1: Create standalone E2E automated test script**
+- [x] **Step 1: Create standalone E2E automated test script**
 
 Create `tests/e2e_trackpad_test.py`:
 ```python
@@ -997,14 +997,15 @@ if __name__ == "__main__":
     asyncio.run(run_e2e_test())
 ```
 
-- [ ] **Step 2: Run all test suites**
+- [x] **Step 2: Run all test suites**
 
 Run: `python -m unittest discover tests/ -v`  
 Expected: All unit tests in `tests/` pass.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/e2e_trackpad_test.py
 git commit -m "test: add end-to-end verification script for remote trackpad and PIN gate"
 ```
+
