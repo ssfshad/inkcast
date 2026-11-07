@@ -11,6 +11,8 @@ Run:  python inkcast.py      (or double-click "Start InkCast.bat")
 """
 import asyncio
 import base64
+import ctypes
+from ctypes import wintypes
 import io
 import json
 import math
@@ -31,6 +33,95 @@ from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMenu, QPushBu
                                QSystemTrayIcon, QVBoxLayout, QWidget)
 
 APP = "InkCast"
+
+
+# --------------------------------------------------------------------------- Win32 Mouse Input
+INPUT_MOUSE = 0
+MOUSEEVENTF_MOVE = 0x0001
+MOUSEEVENTF_LEFTDOWN = 0x0002
+MOUSEEVENTF_LEFTUP = 0x0004
+MOUSEEVENTF_RIGHTDOWN = 0x0008
+MOUSEEVENTF_RIGHTUP = 0x0010
+MOUSEEVENTF_WHEEL = 0x0800
+MOUSEEVENTF_ABSOLUTE = 0x8000
+
+class MOUSEINPUT(ctypes.Structure):
+    _fields_ = [
+        ("dx", wintypes.LONG),
+        ("dy", wintypes.LONG),
+        ("mouseData", wintypes.DWORD),
+        ("dwFlags", wintypes.DWORD),
+        ("time", wintypes.DWORD),
+        ("dwExtraInfo", ctypes.c_size_t),
+    ]
+
+class INPUT_UNION(ctypes.Union):
+    _fields_ = [("mi", MOUSEINPUT)]
+
+class INPUT(ctypes.Structure):
+    _fields_ = [
+        ("type", wintypes.DWORD),
+        ("u", INPUT_UNION),
+    ]
+
+def _send_single_input(flags, dx=0, dy=0, data=0) -> bool:
+    if sys.platform != "win32":
+        return True
+    inp = INPUT(type=INPUT_MOUSE)
+    inp.u.mi.dx = int(dx)
+    inp.u.mi.dy = int(dy)
+    inp.u.mi.mouseData = int(data) & 0xFFFFFFFF
+    inp.u.mi.dwFlags = flags
+    inp.u.mi.time = 0
+    inp.u.mi.dwExtraInfo = 0
+    res = ctypes.windll.user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
+    return res == 1
+
+def inject_mouse_event(action: str, **kwargs) -> bool:
+    if sys.platform != "win32":
+        return True
+    if action == "move_rel":
+        dx = kwargs.get("dx", 0)
+        dy = kwargs.get("dy", 0)
+        return _send_single_input(MOUSEEVENTF_MOVE, dx=dx, dy=dy)
+    elif action == "move_abs":
+        # x, y normalized [0.0..1.0] -> [0..65535]
+        nx = max(0.0, min(1.0, float(kwargs.get("x", 0.0))))
+        ny = max(0.0, min(1.0, float(kwargs.get("y", 0.0))))
+        ax = int(nx * 65535.0)
+        ay = int(ny * 65535.0)
+        return _send_single_input(MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE, dx=ax, dy=ay)
+    elif action == "click":
+        btn = kwargs.get("btn", "left")
+        if btn == "right":
+            _send_single_input(MOUSEEVENTF_RIGHTDOWN)
+            return _send_single_input(MOUSEEVENTF_RIGHTUP)
+        else:
+            _send_single_input(MOUSEEVENTF_LEFTDOWN)
+            return _send_single_input(MOUSEEVENTF_LEFTUP)
+    elif action == "down":
+        btn = kwargs.get("btn", "left")
+        flag = MOUSEEVENTF_RIGHTDOWN if btn == "right" else MOUSEEVENTF_LEFTDOWN
+        return _send_single_input(flag)
+    elif action == "up":
+        btn = kwargs.get("btn", "left")
+        flag = MOUSEEVENTF_RIGHTUP if btn == "right" else MOUSEEVENTF_LEFTUP
+        return _send_single_input(flag)
+    elif action == "scroll":
+        dy = kwargs.get("dy", 0)
+        return _send_single_input(MOUSEEVENTF_WHEEL, data=dy)
+    return False
+
+class InputExecutor:
+    def __init__(self):
+        self.executor = ThreadPoolExecutor(max_workers=1)
+
+    def submit_mouse(self, action: str, **kwargs):
+        return self.executor.submit(inject_mouse_event, action, **kwargs)
+
+    def shutdown(self):
+        self.executor.shutdown(wait=False)
+
 
 
 def resource_dir():
