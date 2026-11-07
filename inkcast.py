@@ -32,7 +32,7 @@ from aiohttp import web
 from PySide6.QtCore import Qt, QObject, Signal, QPointF, QRectF, QTimer, QBuffer, QByteArray, QIODevice
 from PySide6.QtGui import (QAction, QColor, QFont, QGuiApplication, QIcon, QImage, QPainter,
                            QPainterPath, QPen, QPixmap, QPolygonF, QRegion)
-from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMenu, QPushButton,
+from PySide6.QtWidgets import (QApplication, QHBoxLayout, QInputDialog, QLabel, QMenu, QPushButton,
                                QSystemTrayIcon, QVBoxLayout, QWidget)
 
 APP = "InkCast"
@@ -223,6 +223,19 @@ class AuthManager:
             self.record_failed_attempt(client_ip)
             return False, "Incorrect PIN."
 
+
+
+class POINT(ctypes.Structure):
+    _fields_ = [("x", wintypes.LONG), ("y", wintypes.LONG)]
+
+def get_normalized_cursor(screen_w: int, screen_h: int) -> tuple[float, float]:
+    if sys.platform != "win32" or screen_w <= 0 or screen_h <= 0:
+        return 0.5, 0.5
+    pt = POINT()
+    ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
+    x = max(0.0, min(1.0, pt.x / float(screen_w)))
+    y = max(0.0, min(1.0, pt.y / float(screen_h)))
+    return round(x, 4), round(y, 4)
 
 
 def resource_dir():
@@ -774,6 +787,11 @@ class Server:
     def __init__(self, bridge, aspect):
         self.bridge = bridge
         self.aspect = aspect
+        self.screen_w = 1920
+        self.screen_h = 1080
+        self.input_executor = InputExecutor()
+        self.auth_manager = AuthManager(pin_hash=load_settings().get("remote_pin", ""))
+        self.mouse_enabled = load_settings().get("mouse_enabled", True)
         self.pages = {"screen": {}, "board": {}}   # canonical items, so a reloaded tablet page gets them back
         self.page = "screen"
         self.bg = "white"
@@ -863,10 +881,19 @@ class Server:
             data = await self.loop.run_in_executor(self.exec, self.grab)
             if not ws.closed:
                 await ws.send_bytes(data)
+                cx, cy = get_normalized_cursor(self.screen_w, self.screen_h)
+                await ws.send_str(json.dumps({"t": "cur", "x": cx, "y": cy}))
         except Exception as e:
             if not self.grab_failed:
                 print("Screen preview unavailable:", e)
                 self.grab_failed = True
+
+    def broadcast_mouse_state(self, enabled: bool):
+        if self.loop:
+            asyncio.run_coroutine_threadsafe(
+                self.broadcast(json.dumps({"t": "mouse_state", "enabled": enabled})),
+                self.loop
+            )
 
     # ---- images from the web / clipboard
     async def download_image(self, url):
@@ -1434,9 +1461,12 @@ def main():
 
     g = overlay.geometry()
     server = Server(bridge, g.width() / max(1, g.height()))
+    server.screen_w = max(1, g.width())
+    server.screen_h = max(1, g.height())
     threading.Thread(target=server.run, daemon=True).start()
 
     url = f"http://{local_ip()}:{PORT}"
+    settings = load_settings()
 
     tray = QSystemTrayIcon(tray_icon())
     tray.setToolTip(f"{APP} - open {url} on your tablet")
@@ -1512,6 +1542,8 @@ def main():
         tray.showMessage(APP, f"Cloudflare Tunnel active!\nLink copied to clipboard:\n{remote_url}")
         QGuiApplication.clipboard().setText(remote_url)
         tray.setToolTip(f"{APP}\nWiFi: {url}\nRemote: {remote_url}")
+        if not settings.get("remote_pin"):
+            QTimer.singleShot(2000, lambda: tray.showMessage(APP, "Warning: No remote PIN set! Remote access is locked until you set a PIN in tray."))
 
     def on_tunnel_error(err):
         tray.showMessage(APP, f"Cloudflare Tunnel: {err}")
@@ -1545,6 +1577,33 @@ def main():
 
     camera.triggered.connect(start_camera)
     camera.setVisible(os.path.isfile(cam_bat))
+    mouse_toggle = QAction("Allow remote mouse", checkable=True)
+    mouse_toggle.setChecked(settings.get("mouse_enabled", True))
+    pin_action = QAction("Remote access PIN…")
+
+    def on_mouse_toggle():
+        enabled = mouse_toggle.isChecked()
+        settings["mouse_enabled"] = enabled
+        save_settings(settings)
+        server.mouse_enabled = enabled
+        server.broadcast_mouse_state(enabled)
+
+    def on_set_pin():
+        pin, ok = QInputDialog.getText(None, "Remote Access PIN", 
+                                       "Enter a 6-8 digit PIN for remote access\n(leave blank to lock remote access):")
+        if ok:
+            pin = pin.strip()
+            settings["remote_pin"] = hash_pin(pin)
+            save_settings(settings)
+            server.auth_manager.set_pin(pin)
+            if pin:
+                tray.showMessage(APP, "Remote PIN updated. Active remote sessions revoked.")
+            else:
+                tray.showMessage(APP, "Remote PIN cleared. Remote access is now locked.")
+
+    mouse_toggle.triggered.connect(on_mouse_toggle)
+    pin_action.triggered.connect(on_set_pin)
+
     quit_ = QAction(f"Quit {APP}")
     quit_.triggered.connect(app.quit)
     menu.addAction(info)
@@ -1555,6 +1614,9 @@ def main():
     menu.addSeparator()
     for a in (paste, clear, board, toggle):
         menu.addAction(a)
+    menu.addSeparator()
+    menu.addAction(mouse_toggle)
+    menu.addAction(pin_action)
     menu.addSeparator()
     menu.addAction(camera)
     menu.addSeparator()
