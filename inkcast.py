@@ -950,6 +950,32 @@ class Server:
         self.apply(op)
         self.bridge.ops.emit(json.dumps(op))
 
+    def handle_mouse_msg(self, d: dict, is_authorized: bool) -> bool:
+        if not self.mouse_enabled or not is_authorized:
+            return False
+        action = d.get("action")
+        if not action:
+            return False
+        if action == "move_rel":
+            dx = float(d.get("dx", 0.0)) * self.screen_w
+            dy = float(d.get("dy", 0.0)) * self.screen_h
+            self.input_executor.submit_mouse("move_rel", dx=dx, dy=dy)
+            return True
+        elif action == "move_abs":
+            x = float(d.get("x", 0.0))
+            y = float(d.get("y", 0.0))
+            self.input_executor.submit_mouse("move_abs", x=x, y=y)
+            return True
+        elif action in ("click", "down", "up"):
+            btn = d.get("btn", "left")
+            self.input_executor.submit_mouse(action, btn=btn)
+            return True
+        elif action == "scroll":
+            dy = int(d.get("dy", 0))
+            self.input_executor.submit_mouse("scroll", dy=dy)
+            return True
+        return False
+
     def slide(self, direction):
         if direction in ("next", "prev"):
             self.loop.run_in_executor(self.exec, trigger_slide, direction)
@@ -980,27 +1006,60 @@ class Server:
                 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             except OSError:
                 pass
+
+        remote = is_remote_request(request)
+        client_ip = get_client_ip(request)
+        is_authorized = not remote
+
         self.clients.add(ws)
-        print("Tablet connected:", request.remote)
+        print(f"Tablet connected ({'Remote' if remote else 'LAN'} from {client_ip})")
         self.bridge.tablet.emit()
         await ws.send_str(json.dumps({
             "t": "hello", "aspect": self.aspect, "page": self.page, "bg": self.bg,
+            "mouse_enabled": self.mouse_enabled,
+            "auth_required": remote and bool(self.auth_manager.pin_hash),
+            "screen_w": self.screen_w, "screen_h": self.screen_h,
             "pages": {n: list(v.values()) for n, v in self.pages.items()}}))
         try:
             async for m in ws:
                 if m.type != web.WSMsgType.TEXT:
                     continue
                 if m.data == '{"t":"f"}':
-                    asyncio.ensure_future(self.send_frame(ws))
+                    if not remote or is_authorized:
+                        asyncio.ensure_future(self.send_frame(ws))
                     continue
                 try:
                     d = json.loads(m.data)
                 except ValueError:
                     continue
-                if d.get("t") == "slide":
+
+                t = d.get("t")
+                if t == "auth":
+                    pin = d.get("pin")
+                    token = d.get("token")
+                    if token and self.auth_manager.validate_token(token):
+                        is_authorized = True
+                        await ws.send_str(json.dumps({"t": "auth_ok", "token": token}))
+                    elif pin:
+                        ok, res = self.auth_manager.validate_pin(str(pin), client_ip)
+                        if ok:
+                            is_authorized = True
+                            await ws.send_str(json.dumps({"t": "auth_ok", "token": res}))
+                        else:
+                            await ws.send_str(json.dumps({"t": "auth_err", "msg": res}))
+                    else:
+                        await ws.send_str(json.dumps({"t": "auth_err", "msg": "Invalid auth request"}))
+                    continue
+                if t == "mouse":
+                    self.handle_mouse_msg(d, is_authorized)
+                    continue
+                if remote and not is_authorized:
+                    continue
+
+                if t == "slide":
                     self.slide(d.get("dir", "next"))
                     continue
-                if d.get("t") == "fetch":
+                if t == "fetch":
                     url = str(d.get("url", ""))
                     if url.startswith(("http://", "https://", "data:image/")):
                         asyncio.ensure_future(self.fetch_for_tablet(ws, url))
