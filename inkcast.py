@@ -1798,12 +1798,50 @@ html,body{margin:0;height:100%;background:#000;color:var(--fg);overflow:hidden;o
   text-align:center;padding:12px;color:#c7c7cc;font-size:15px;outline:none;-webkit-user-select:text;user-select:text;touch-action:auto;caret-color:transparent;-webkit-touch-callout:default}
 #pasteclose{margin-top:12px;width:100%;height:40px;border-radius:10px;border:0;background:var(--btn);color:var(--fg);font-size:15px}
 input[type=file]{display:none}
+#cur-ring{display:none;position:absolute;width:24px;height:24px;margin-left:-12px;margin-top:-12px;border:2.5px solid #ff3b30;border-radius:50%;background:rgba(255,59,48,0.25);pointer-events:none;z-index:90;transition:transform 0.05s linear;box-shadow:0 0 8px rgba(255,59,48,0.6);}
+#hud{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:95;font-family:inherit;}
+.hud-bar{display:flex;align-items:center;gap:6px;background:rgba(20,21,23,0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);padding:6px 10px;border-radius:24px;box-shadow:0 6px 20px rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.15);}
+.hud-pill{display:flex;align-items:center;justify-content:center;width:44px;height:44px;background:rgba(20,21,23,0.9);border-radius:50%;border:1px solid rgba(255,255,255,0.25);color:#fff;font-size:20px;box-shadow:0 4px 12px rgba(0,0,0,0.4);cursor:pointer;}
+.hud-btn{background:rgba(255,255,255,0.1);border:none;color:#fff;font-size:14px;font-weight:600;padding:8px 14px;border-radius:16px;cursor:pointer;user-select:none;-webkit-user-select:none;}
+.hud-btn:active{background:rgba(255,255,255,0.25);transform:scale(0.96);}
+.hud-icon{width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:50%;}
+.hud-sep{width:1px;height:20px;background:rgba(255,255,255,0.2);margin:0 2px;}
+.modal-wrap{position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:100;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);}
+.modal-box{background:#1e2023;border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:20px;width:280px;text-align:center;color:#fff;box-shadow:0 8px 32px rgba(0,0,0,0.5);}
+.modal-err{color:#ff453a;font-size:12px;min-height:16px;margin:4px 0;}
+#pininput{width:100%;box-sizing:border-box;padding:10px;font-size:20px;text-align:center;letter-spacing:4px;border-radius:8px;border:1px solid #444;background:#121315;color:#fff;margin-bottom:12px;}
+.modal-actions{display:flex;gap:8px;}
+.modal-btn-pri{flex:1;background:#0a84ff;border:none;padding:10px;border-radius:8px;color:#fff;font-weight:600;cursor:pointer;}
+.modal-btn-sec{flex:1;background:#3a3a3c;border:none;padding:10px;border-radius:8px;color:#fff;cursor:pointer;}
 </style></head><body>
 <div id="side"></div>
 <div id="top"></div>
-<div id="stage"><img id="bg" alt=""><canvas id="cv"></canvas><textarea id="ed" rows="1" autocapitalize="sentences" spellcheck="false"></textarea></div>
+<div id="stage"><img id="bg" alt=""><canvas id="cv"></canvas><div id="cur-ring"></div><textarea id="ed" rows="1" autocapitalize="sentences" spellcheck="false"></textarea></div>
 <div id="hint"></div>
 <div id="toast"></div>
+<div id="hud" style="display:none;">
+  <div id="hud-full" class="hud-bar">
+    <button class="hud-btn" id="hudPrev" title="Previous Slide">◀ Prev</button>
+    <button class="hud-btn" id="hudNext" title="Next Slide">Next ▶</button>
+    <div class="hud-sep"></div>
+    <button class="hud-btn" id="hudMode" title="Toggle Trackpad Mode">🖱️ Rel</button>
+    <div class="hud-sep"></div>
+    <button class="hud-btn hud-icon" id="hudMin" title="Minimize">▾</button>
+    <button class="hud-btn hud-icon" id="hudExit" title="Exit Trackpad">✕</button>
+  </div>
+  <button id="hud-mini" class="hud-pill" style="display:none;" title="Expand Trackpad Controls">🖱️</button>
+</div>
+<div id="pinmodal" class="modal-wrap" style="display:none;">
+  <div class="modal-box">
+    <h3 style="margin-top:0;">Enter Host PIN</h3>
+    <p id="pinerr" class="modal-err"></p>
+    <input type="password" id="pininput" maxlength="8" pattern="[0-9]*" inputmode="numeric" placeholder="6-digit PIN">
+    <div class="modal-actions">
+      <button id="pinsubmit" class="modal-btn-pri">Unlock</button>
+      <button id="pincancel" class="modal-btn-sec">Cancel</button>
+    </div>
+  </div>
+</div>
 <div id="pastebox"><div id="pastearea" contenteditable="true">Long-press here and tap <b>&nbsp;Paste&nbsp;</b><br>(or press Ctrl/⌘+V)</div>
   <button id="pasteclose">Cancel</button></div>
 <div id="bgmenu"></div>
@@ -1842,12 +1880,14 @@ const I = {
  prev:'<path d="M15 18l-6-6 6-6"/>',
  next:'<path d="M9 18l6-6-6-6"/>',
  full:'<path d="M3 8V5a2 2 0 0 1 2-2h3m11 0h3a2 2 0 0 1 2 2v3m0 8v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/>',
- exitfull:'<path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>'
+ exitfull:'<path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>',
+ trackpad:'<rect x="4" y="3" width="16" height="18" rx="2.5"/><line x1="4" y1="14" x2="20" y2="14"/><line x1="12" y1="14" x2="12" y2="21"/>'
 };
 const svg = n => '<svg viewBox="0 0 24 24">'+I[n]+'</svg>';
 const TOOLS = [['pen','Pen'],['marker','Marker'],['hl','Highlight'],['neon','Neon'],['laser','Laser'],'|',
   ['line','Line'],['arrow','Arrow'],['farrow','Curve'],['rect','Box'],['ellipse','Circle'],['text','Text'],'|',
-  ['select','Select'],['eraser','Eraser'],['image','Image'],['paste','Paste']];
+  ['select','Select'],['eraser','Eraser'],['image','Image'],['paste','Paste'],'|',
+  ['trackpad','Trackpad']];
 const COLORS = ['#ff3b30','#ff9500','#ffcc00','#34c759','#00c7ff','#0a84ff','#bf5af2','#ff2d92','#ffffff','#000000'];
 const STROKE = {pen:1,marker:1,hl:1,neon:1,laser:1,farrow:1}, SHAPE = {line:1,arrow:1,rect:1,ellipse:1};
 const WMUL = {pen:1,marker:2.2,hl:4,neon:1.2,laser:1.2,farrow:1};
@@ -1866,7 +1906,7 @@ const fontOf = (f, px) => '700 ' + px + 'px ' + (FONTS[f] || FONTS.sans);
 
 let S = {tool:'pen', color:'#ff3b30', size:6, fingers:true, fingersSet:false, live:true, bg:'white', font:'sans'};
 try { Object.assign(S, JSON.parse(localStorage.getItem('inkcast.s')||'{}')); } catch(e){}
-if (!TOOLS.some(t => t[0]===S.tool) || S.tool==='image' || S.tool==='paste') S.tool = 'pen';
+if (!TOOLS.some(t => t[0]===S.tool) || S.tool==='image' || S.tool==='paste' || S.tool==='trackpad') S.tool = 'pen';
 if (!BGS.includes(S.bg)) S.bg = 'white';
 if (!FONTS[S.font]) S.font = 'sans';
 const isHex = c => typeof c==='string' && /^#[0-9a-f]{6}$/i.test(c);
@@ -2002,10 +2042,10 @@ $('undo').onclick = undo; $('redo').onclick = redo; $('clear').onclick = clearAl
 $('screenB').onclick = () => setPage('screen');
 $('prevB').onclick = () => sendSlide('prev');
 $('nextB').onclick = () => sendSlide('next');
-function sendSlide(dir){
+function sendSlide(dir, quiet=false){
   if (!connected) { toast('Offline: cannot change slide'); return; }
   sendNow({t:'slide', dir});
-  toast(dir==='next' ? 'Next Slide ▶' : '◀ Prev Slide');
+  if (!quiet) toast(dir==='next' ? 'Next Slide ▶' : '◀ Prev Slide');
 }
 function isFullscreen(){
   return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
@@ -2072,7 +2112,7 @@ function toast(msg){
 function setTool(t){
   if (editor) commitEditor();
   if (t!=='select') sel = [];
-  if (t!=='laser') prevTool = t;
+  if (t!=='laser' && t!=='trackpad') prevTool = t;
   S.tool = t; save(); ui(); needDraw = true;
 }
 function setColor(c){
@@ -2118,13 +2158,146 @@ function ui(){
   $('fingB').classList.toggle('on', S.fingers);
   document.querySelectorAll('.bgo').forEach(o => o.classList.toggle('on', page==='board' && o.dataset.bg===S.bg));
   let h = '';
-  if (S.tool==='text') h = 'Tap where you want text · tap a text to edit it';
-  else if (S.tool==='select') h = sel.length
-    ? (sel.length>1 ? sel.length+' selected · ' : '') + 'drag to move · corner dots to resize · tap a color, size or font to change it'
-    : 'Tap something, or draw a loop around things to select them';
-  else if (S.tool==='farrow') h = 'Draw a curved line — the arrow head goes where you lift the pen';
+  if (S.tool==='trackpad') {
+    if (authRequired && !authToken) promptPin();
+    else { $('hud').style.display = 'block'; $('hud-full').style.display = 'flex'; $('hud-mini').style.display = 'none'; }
+    h = 'Trackpad active · drag to move · tap to left-click · 2-finger tap to right-click';
+  } else {
+    $('hud').style.display = 'none';
+    const cr = $('cur-ring'); if (cr) cr.style.display = 'none';
+    if (S.tool==='text') h = 'Tap where you want text · tap a text to edit it';
+    else if (S.tool==='select') h = sel.length
+      ? (sel.length>1 ? sel.length+' selected · ' : '') + 'drag to move · corner dots to resize · tap a color, size or font to change it'
+      : 'Tap something, or draw a loop around things to select them';
+    else if (S.tool==='farrow') h = 'Draw a curved line — the arrow head goes where you lift the pen';
+  }
   $('hint').textContent = h;
 }
+
+// ---------------- trackpad & pin auth
+let authRequired = false, authToken = localStorage.getItem('inkcast.auth_token') || '', mouseEnabled = true;
+let tpMode = 'rel';
+let tpStart = null, tpLast = null, tpDist = 0, tpMoved = false;
+let tpTwoStart = null, tpTwoLast = null;
+let tpPendingMove = null, tpRaf = null;
+
+function promptPin() {
+  $('pinmodal').style.display = 'flex';
+  $('pininput').value = '';
+  $('pinerr').textContent = '';
+  $('pininput').focus();
+}
+
+function flushMouseMove() {
+  if (tpPendingMove) {
+    send(tpPendingMove);
+    tpPendingMove = null;
+  }
+  tpRaf = null;
+}
+
+function queueMouseMove(msg) {
+  tpPendingMove = msg;
+  if (!tpRaf) {
+    tpRaf = requestAnimationFrame(flushMouseMove);
+  }
+}
+
+$('hudPrev').onclick = () => sendSlide('prev', true);
+$('hudNext').onclick = () => sendSlide('next', true);
+$('hudMode').onclick = () => {
+  tpMode = (tpMode === 'rel' ? 'abs' : 'rel');
+  $('hudMode').textContent = (tpMode === 'rel' ? '🖱️ Rel' : '🎯 Direct');
+};
+$('hudMin').onclick = () => {
+  $('hud-full').style.display = 'none';
+  $('hud-mini').style.display = 'flex';
+};
+$('hud-mini').onclick = () => {
+  $('hud-mini').style.display = 'none';
+  $('hud-full').style.display = 'flex';
+};
+$('hudExit').onclick = () => {
+  $('hud').style.display = 'none';
+  const cr = $('cur-ring'); if (cr) cr.style.display = 'none';
+  setTool(prevTool || 'pen');
+};
+
+$('pincancel').onclick = () => {
+  $('pinmodal').style.display = 'none';
+  setTool(prevTool || 'pen');
+};
+$('pinsubmit').onclick = () => {
+  const pin = $('pininput').value.trim();
+  if (!pin) return;
+  sendNow({ t: 'auth', pin: pin });
+};
+
+stage.addEventListener('touchstart', e => {
+  if (S.tool !== 'trackpad') return;
+  if (e.touches.length === 1) {
+    const t = e.touches[0];
+    tpStart = { x: t.clientX, y: t.clientY, time: Date.now() };
+    tpLast = { x: t.clientX, y: t.clientY };
+    tpDist = 0;
+    tpMoved = false;
+  } else if (e.touches.length === 2) {
+    tpTwoStart = { y: (e.touches[0].clientY + e.touches[1].clientY) / 2, time: Date.now() };
+    tpTwoLast = tpTwoStart.y;
+  }
+}, { passive: false });
+
+stage.addEventListener('touchmove', e => {
+  if (S.tool !== 'trackpad') return;
+  e.preventDefault();
+  if (e.touches.length === 1 && tpLast) {
+    const t = e.touches[0];
+    const dx = t.clientX - tpLast.x;
+    const dy = t.clientY - tpLast.y;
+    tpDist += Math.hypot(dx, dy);
+    if (tpDist > 4) tpMoved = true;
+    tpLast = { x: t.clientX, y: t.clientY };
+
+    if (tpMode === 'rel') {
+      const vdx = dx / Math.max(1, stage.clientWidth);
+      const vdy = dy / Math.max(1, stage.clientHeight);
+      queueMouseMove({ t: 'mouse', action: 'move_rel', dx: vdx, dy: vdy });
+    } else if (tpMode === 'abs' && crect) {
+      const nx = (t.clientX - crect.x) / crect.w;
+      const ny = (t.clientY - crect.y) / crect.h;
+      queueMouseMove({ t: 'mouse', action: 'move_abs', x: nx, y: ny });
+    }
+  } else if (e.touches.length === 2 && tpTwoLast !== null) {
+    const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+    const dScroll = cy - tpTwoLast;
+    tpTwoLast = cy;
+    queueMouseMove({ t: 'mouse', action: 'scroll', dy: Math.round(dScroll * 4) });
+  }
+}, { passive: false });
+
+stage.addEventListener('touchend', e => {
+  if (S.tool !== 'trackpad') return;
+  if (e.touches.length === 0 && tpStart) {
+    const elapsed = Date.now() - tpStart.time;
+    if (!tpMoved && elapsed < 320) {
+      if (tpMode === 'abs' && crect) {
+        const nx = (tpStart.x - crect.x) / crect.w;
+        const ny = (tpStart.y - crect.y) / crect.h;
+        sendNow({ t: 'mouse', action: 'move_abs', x: nx, y: ny });
+      }
+      sendNow({ t: 'mouse', action: 'click', btn: 'left' });
+    }
+    tpStart = null;
+    tpLast = null;
+  } else if (e.touches.length === 0 && tpTwoStart) {
+    const elapsed = Date.now() - tpTwoStart.time;
+    if (Math.abs(tpTwoLast - tpTwoStart.y) < 15 && elapsed < 350) {
+      sendNow({ t: 'mouse', action: 'click', btn: 'right' });
+    }
+    tpTwoStart = null;
+    tpTwoLast = null;
+  }
+});
 
 // ---------------- layout
 function layout(){
@@ -2426,6 +2599,11 @@ function connect(){
     const m = JSON.parse(ev.data);
     if (m.t === 'hello') {
       aspect = m.aspect || aspect; layout();
+      authRequired = !!m.auth_required;
+      mouseEnabled = (m.mouse_enabled !== false);
+      if (authRequired && authToken) {
+        sendNow({t:'auth', token: authToken});
+      }
       if (firstHello) {
         const P = m.pages || {};
         pages = {screen:(P.screen||[]).map(loadImg), board:(P.board||[]).map(loadImg)};
@@ -2435,6 +2613,27 @@ function connect(){
         firstHello = false;
       } else send({t:'sync', pages, page, bg:S.bg});
       baseDirty = needDraw = true; updBg(); ui(); reqFrame();
+    } else if (m.t === 'auth_ok') {
+      if (m.token) { authToken = m.token; localStorage.setItem('inkcast.auth_token', authToken); }
+      $('pinmodal').style.display = 'none';
+      toast('Unlocked host control');
+      if (S.tool === 'trackpad') {
+        $('hud').style.display = 'block';
+        $('hud-full').style.display = 'flex';
+        $('hud-mini').style.display = 'none';
+      }
+    } else if (m.t === 'auth_err') {
+      $('pinerr').textContent = m.msg || 'Authentication failed';
+    } else if (m.t === 'mouse_state') {
+      mouseEnabled = !!m.enabled;
+      if (!mouseEnabled && S.tool === 'trackpad') toast('Host disabled remote mouse');
+    } else if (m.t === 'cur' && S.tool === 'trackpad') {
+      const r = $('cur-ring');
+      if (r && crect) {
+        r.style.display = 'block';
+        r.style.left = (crect.x + m.x * crect.w) + 'px';
+        r.style.top = (crect.y + m.y * crect.h) + 'px';
+      }
     } else if (m.t === 'cmd') runCmd(m);
     else if (m.t === 'toast') toast(m.msg);
   };
@@ -2526,6 +2725,7 @@ function accept(e){
 function pushHist(h){ hist.push(h); if (hist.length>300) hist.shift(); redoS.length = 0; ui(); }
 
 cv.addEventListener('pointerdown', e => {
+  if (S.tool === 'trackpad') return;
   if (!accept(e)) return;
   e.preventDefault();
   if (editor) { commitEditor(); return; }
