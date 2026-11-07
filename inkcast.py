@@ -13,10 +13,13 @@ import asyncio
 import base64
 import ctypes
 from ctypes import wintypes
+import hashlib
 import io
+import ipaddress
 import json
 import math
 import os
+import secrets
 import signal
 import socket
 import sys
@@ -121,6 +124,104 @@ class InputExecutor:
 
     def shutdown(self):
         self.executor.shutdown(wait=False)
+
+
+# --------------------------------------------------------------------------- Settings & Auth
+def get_settings_path() -> str:
+    target_dir = os.path.expandvars(r"%LOCALAPPDATA%\InkCast")
+    os.makedirs(target_dir, exist_ok=True)
+    return os.path.join(target_dir, "settings.json")
+
+def load_settings() -> dict:
+    defaults = {"remote_pin": "", "mouse_enabled": True}
+    path = get_settings_path()
+    if not os.path.isfile(path):
+        return defaults
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            d = json.load(f)
+            return {**defaults, **d}
+    except Exception as e:
+        print(f"Warning: could not read settings.json ({e}), using defaults")
+        return defaults
+
+def save_settings(data: dict):
+    path = get_settings_path()
+    tmp_path = path + f".tmp-{os.getpid()}"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp_path, path)
+    except Exception as e:
+        print(f"Error saving settings: {e}")
+        if os.path.exists(tmp_path):
+            try: os.remove(tmp_path)
+            except OSError: pass
+
+def hash_pin(pin: str) -> str:
+    if not pin:
+        return ""
+    return hashlib.sha256(pin.strip().encode("utf-8")).hexdigest()
+
+def is_remote_request(request) -> bool:
+    if request.headers.get("CF-Connecting-IP"):
+        return True
+    host = (request.host or "").split(":")[0].lower()
+    if not host or host in ("localhost", "127.0.0.1", "::1"):
+        return False
+    try:
+        ipaddress.ip_address(host)
+        return False  # direct LAN IP
+    except ValueError:
+        return True   # domain name or tunnel hostname
+
+def get_client_ip(request) -> str:
+    return request.headers.get("CF-Connecting-IP") or request.remote or "unknown"
+
+class AuthManager:
+    def __init__(self, pin_hash: str = ""):
+        self.pin_hash = pin_hash
+        self.tokens = set()
+        self.failed_attempts = {} # ip -> [timestamps]
+
+    def set_pin(self, pin: str):
+        self.pin_hash = hash_pin(pin)
+        self.revoke_tokens()
+
+    def revoke_tokens(self):
+        self.tokens.clear()
+
+    def validate_token(self, token: str) -> bool:
+        return bool(token and token in self.tokens)
+
+    def issue_token(self) -> str:
+        token = secrets.token_hex(16)
+        self.tokens.add(token)
+        return token
+
+    def is_rate_limited(self, ip: str) -> bool:
+        now = time.time()
+        attempts = [t for t in self.failed_attempts.get(ip, []) if now - t < 60]
+        self.failed_attempts[ip] = attempts
+        return len(attempts) >= 5
+
+    def record_failed_attempt(self, ip: str):
+        now = time.time()
+        attempts = [t for t in self.failed_attempts.get(ip, []) if now - t < 60]
+        attempts.append(now)
+        self.failed_attempts[ip] = attempts
+
+    def validate_pin(self, pin: str, client_ip: str) -> tuple[bool, str]:
+        if not self.pin_hash:
+            return False, "Remote access is locked: host has not set a PIN."
+        if self.is_rate_limited(client_ip):
+            return False, "Too many failed attempts. Locked for 60 seconds."
+        if hash_pin(pin) == self.pin_hash:
+            token = self.issue_token()
+            return True, token
+        else:
+            self.record_failed_attempt(client_ip)
+            return False, "Incorrect PIN."
 
 
 
