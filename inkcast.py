@@ -1798,38 +1798,80 @@ html,body{margin:0;height:100%;background:#000;color:var(--fg);overflow:hidden;o
   text-align:center;padding:12px;color:#c7c7cc;font-size:15px;outline:none;-webkit-user-select:text;user-select:text;touch-action:auto;caret-color:transparent;-webkit-touch-callout:default}
 #pasteclose{margin-top:12px;width:100%;height:40px;border-radius:10px;border:0;background:var(--btn);color:var(--fg);font-size:15px}
 input[type=file]{display:none}
-#cur-ring{display:none;position:absolute;width:24px;height:24px;margin-left:-12px;margin-top:-12px;border:2.5px solid #ff3b30;border-radius:50%;background:rgba(255,59,48,0.25);pointer-events:none;z-index:90;transition:transform 0.05s linear;box-shadow:0 0 8px rgba(255,59,48,0.6);}
-#hud{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:95;font-family:inherit;}
-.hud-bar{display:flex;align-items:center;gap:6px;background:rgba(20,21,23,0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);padding:6px 10px;border-radius:24px;box-shadow:0 6px 20px rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.15);}
-.hud-pill{display:flex;align-items:center;justify-content:center;width:44px;height:44px;background:rgba(20,21,23,0.9);border-radius:50%;border:1px solid rgba(255,255,255,0.25);color:#fff;font-size:20px;box-shadow:0 4px 12px rgba(0,0,0,0.4);cursor:pointer;}
-.hud-btn{background:rgba(255,255,255,0.1);border:none;color:#fff;font-size:14px;font-weight:600;padding:8px 14px;border-radius:16px;cursor:pointer;user-select:none;-webkit-user-select:none;}
-.hud-btn:active{background:rgba(255,255,255,0.25);transform:scale(0.96);}
-.hud-icon{width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:50%;}
-.hud-sep{width:1px;height:20px;background:rgba(255,255,255,0.2);margin:0 2px;}
-.modal-wrap{position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:100;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);}
-.modal-box{background:#1e2023;border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:20px;width:280px;text-align:center;color:#fff;box-shadow:0 8px 32px rgba(0,0,0,0.5);}
-.modal-err{color:#ff453a;font-size:12px;min-height:16px;margin:4px 0;}
-#pininput{width:100%;box-sizing:border-box;padding:10px;font-size:20px;text-align:center;letter-spacing:4px;border-radius:8px;border:1px solid #444;background:#121315;color:#fff;margin-bottom:12px;}
-.modal-actions{display:flex;gap:8px;}
-.modal-btn-pri{flex:1;background:#0a84ff;border:none;padding:10px;border-radius:8px;color:#fff;font-weight:600;cursor:pointer;}
-.modal-btn-sec{flex:1;background:#3a3a3c;border:none;padding:10px;border-radius:8px;color:#fff;cursor:pointer;}
+#mouse-cursor{display:none;position:absolute;left:0;top:0;pointer-events:none;z-index:90;transform:translate(-1px,-1px);will-change:left,top}
+#mouse-cursor svg{filter:drop-shadow(0 2px 5px rgba(0,0,0,0.75));display:block}
+.click-ripple{position:absolute;width:36px;height:36px;margin-left:-18px;margin-top:-18px;border-radius:50%;pointer-events:none;z-index:92;animation:click-ripple-anim .35s cubic-bezier(0.1,0.8,0.3,1) forwards}
+.ripple-left{border:3px solid #0a84ff;background:rgba(10,132,255,0.35)}
+.ripple-right{border:3px solid #ff9f0a;background:rgba(255,159,10,0.35)}
+@keyframes click-ripple-anim{0%{transform:scale(0.2);opacity:1}100%{transform:scale(1.6);opacity:0}}
+#tp-topbar{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:95;display:flex;align-items:center;gap:4px;background:rgba(28,28,30,0.88);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);padding:4px 8px;border-radius:20px;border:1px solid rgba(255,255,255,0.18);box-shadow:0 6px 24px rgba(0,0,0,0.5)}
+.tp-btn{background:transparent;border:none;color:#fff;font-size:13px;font-weight:600;padding:6px 12px;border-radius:14px;cursor:pointer;display:flex;align-items:center;gap:5px;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+.tp-btn:active{background:rgba(255,255,255,0.2);transform:scale(0.96)}
+.tp-mode-btn{background:rgba(255,255,255,0.1);padding:6px 10px}
+.tp-exit-btn{color:#ff453a;font-size:14px;padding:6px 10px}
+.tp-vsep{width:1px;height:18px;background:rgba(255,255,255,0.2);margin:0 2px}
+.modal-wrap{position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:100;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.modal-box{background:#1e2023;border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:20px;width:280px;text-align:center;color:#fff;box-shadow:0 8px 32px rgba(0,0,0,0.5)}
+.modal-err{color:#ff453a;font-size:12px;min-height:16px;margin:4px 0}
+#pininput{width:100%;box-sizing:border-box;padding:10px;font-size:20px;text-align:center;letter-spacing:4px;border-radius:8px;border:1px solid #444;background:#121315;color:#fff;margin-bottom:12px}
+.modal-actions{display:flex;gap:8px}
+.modal-btn-pri{flex:1;background:#0a84ff;border:none;padding:10px;border-radius:8px;color:#fff;font-weight:600;cursor:pointer}
+.modal-btn-sec{flex:1;background:#3a3a3c;border:none;padding:10px;border-radius:8px;color:#fff;cursor:pointer}
+.crd-modal-box{background:#1e2023;border:1px solid rgba(255,255,255,0.18);border-radius:16px;width:min(340px,90vw);padding:20px;color:#fff;box-shadow:0 12px 40px rgba(0,0,0,0.65);font-family:inherit}
+.crd-modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.crd-modal-title{margin:0;font-size:18px;font-weight:600}
+.crd-close-btn{background:transparent;border:none;color:#8e8e93;font-size:18px;cursor:pointer;padding:4px 8px;border-radius:8px}
+.crd-close-btn:active{background:rgba(255,255,255,0.1);color:#fff}
+.crd-option{display:flex;align-items:center;gap:12px;padding:10px 8px;border-radius:10px;cursor:pointer;user-select:none;-webkit-user-select:none}
+.crd-option:active{background:rgba(255,255,255,0.08)}
+.crd-option input[type=radio]{display:none}
+.crd-radio-dot{width:20px;height:20px;border-radius:50%;border:2px solid #8e8e93;position:relative;flex-shrink:0;box-sizing:border-box}
+.crd-option input[type=radio]:checked + .crd-radio-dot{border-color:#0a84ff}
+.crd-option input[type=radio]:checked + .crd-radio-dot::after{content:'';position:absolute;inset:3px;background:#0a84ff;border-radius:50%}
+.crd-option-label{font-size:16px;font-weight:500}
+.crd-sep{height:1px;background:rgba(255,255,255,0.12);margin:14px 0 12px}
+.crd-desc{margin:0;font-size:13px;line-height:1.45;color:#8e8e93}
 </style></head><body>
 <div id="side"></div>
 <div id="top"></div>
-<div id="stage"><img id="bg" alt=""><canvas id="cv"></canvas><div id="cur-ring"></div><textarea id="ed" rows="1" autocapitalize="sentences" spellcheck="false"></textarea></div>
+<div id="stage"><img id="bg" alt=""><canvas id="cv"></canvas><div id="mouse-cursor"><svg viewBox="0 0 24 24" width="24" height="24"><path d="M1 1l13 10.2-6.2 1.2 3.6 6.8-2.6 1.4-3.6-6.8L1 18.5V1z" fill="#ffffff" stroke="#1c1c1e" stroke-width="1.4" stroke-linejoin="round"/></svg></div><textarea id="ed" rows="1" autocapitalize="sentences" spellcheck="false"></textarea></div>
 <div id="hint"></div>
 <div id="toast"></div>
-<div id="hud" style="display:none;">
-  <div id="hud-full" class="hud-bar">
-    <button class="hud-btn" id="hudPrev" title="Previous Slide">◀ Prev</button>
-    <button class="hud-btn" id="hudNext" title="Next Slide">Next ▶</button>
-    <div class="hud-sep"></div>
-    <button class="hud-btn" id="hudMode" title="Toggle Trackpad Mode">🖱️ Rel</button>
-    <div class="hud-sep"></div>
-    <button class="hud-btn hud-icon" id="hudMin" title="Minimize">▾</button>
-    <button class="hud-btn hud-icon" id="hudExit" title="Exit Trackpad">✕</button>
+<div id="tp-topbar" style="display:none;">
+  <button class="tp-btn" id="tpPrev" title="Previous Slide">◀</button>
+  <button class="tp-btn" id="tpNext" title="Next Slide">▶</button>
+  <div class="tp-vsep"></div>
+  <button class="tp-btn tp-mode-btn" id="tpConfig" title="Configure Touch Input">
+    <span id="tpModeIcon">🖱️</span>
+    <span id="tpModeText">Trackpad</span>
+    <span style="font-size:10px;opacity:0.7;margin-left:2px;">▾</span>
+  </button>
+  <div class="tp-vsep"></div>
+  <button class="tp-btn tp-exit-btn" id="tpExit" title="Exit Remote Control">✕</button>
+</div>
+<div id="touch-config-modal" class="modal-wrap" style="display:none;">
+  <div class="crd-modal-box">
+    <div class="crd-modal-header">
+      <h3 class="crd-modal-title">Configure Touch Input</h3>
+      <button class="crd-close-btn" id="closeTouchConfig">✕</button>
+    </div>
+    <div class="crd-modal-body">
+      <label class="crd-option" id="optRel">
+        <input type="radio" name="touch-mode" value="rel" id="radioRel">
+        <span class="crd-radio-dot"></span>
+        <span class="crd-option-label">Trackpad mode</span>
+      </label>
+      <label class="crd-option" id="optAbs">
+        <input type="radio" name="touch-mode" value="abs" id="radioAbs">
+        <span class="crd-radio-dot"></span>
+        <span class="crd-option-label">Direct touch mode</span>
+      </label>
+      <div class="crd-sep"></div>
+      <p id="crd-desc" class="crd-desc">
+        Drag anywhere to move the mouse pointer. Tap to left-click, tap with two fingers to right-click, swipe with two fingers to scroll.
+      </p>
+    </div>
   </div>
-  <button id="hud-mini" class="hud-pill" style="display:none;" title="Expand Trackpad Controls">🖱️</button>
 </div>
 <div id="pinmodal" class="modal-wrap" style="display:none;">
   <div class="modal-box">
@@ -2113,7 +2155,14 @@ function setTool(t){
   if (editor) commitEditor();
   if (t!=='select') sel = [];
   if (t!=='laser' && t!=='trackpad') prevTool = t;
-  S.tool = t; save(); ui(); needDraw = true;
+  const changed = (S.tool !== t);
+  if (t === 'trackpad') {
+    if (page !== 'screen') setPage('screen');
+    if (!S.live) { S.live = true; save(); updBg(); reqFrame(); }
+  }
+  S.tool = t; save();
+  if (changed) layout();
+  ui(); needDraw = true;
 }
 function setColor(c){
   S.color = c; save();
@@ -2159,12 +2208,21 @@ function ui(){
   document.querySelectorAll('.bgo').forEach(o => o.classList.toggle('on', page==='board' && o.dataset.bg===S.bg));
   let h = '';
   if (S.tool==='trackpad') {
-    if (authRequired && !authToken) promptPin();
-    else { $('hud').style.display = 'block'; $('hud-full').style.display = 'flex'; $('hud-mini').style.display = 'none'; }
-    h = 'Trackpad active · drag to move · tap to left-click · 2-finger tap to right-click';
+    side.style.display = 'none';
+    topBar.style.display = 'none';
+    if (authRequired && !authToken) {
+      $('tp-topbar').style.display = 'none';
+      promptPin();
+    } else {
+      $('tp-topbar').style.display = 'flex';
+    }
+    h = tpMode === 'rel' ? 'Trackpad: drag to move · tap to left-click · 2-finger tap right-click · 2-finger scroll'
+                         : 'Direct touch: tap screen to click · touch & hold to right-click';
   } else {
-    $('hud').style.display = 'none';
-    const cr = $('cur-ring'); if (cr) cr.style.display = 'none';
+    side.style.display = 'flex';
+    topBar.style.display = 'flex';
+    $('tp-topbar').style.display = 'none';
+    const mc = $('mouse-cursor'); if (mc) mc.style.display = 'none';
     if (S.tool==='text') h = 'Tap where you want text · tap a text to edit it';
     else if (S.tool==='select') h = sel.length
       ? (sel.length>1 ? sel.length+' selected · ' : '') + 'drag to move · corner dots to resize · tap a color, size or font to change it'
@@ -2172,14 +2230,67 @@ function ui(){
     else if (S.tool==='farrow') h = 'Draw a curved line — the arrow head goes where you lift the pen';
   }
   $('hint').textContent = h;
+  updateCursorUI();
 }
 
-// ---------------- trackpad & pin auth
+// ---------------- trackpad, touch config & pin auth
 let authRequired = false, authToken = localStorage.getItem('inkcast.auth_token') || '', mouseEnabled = true;
-let tpMode = 'rel';
+let tpMode = localStorage.getItem('inkcast.tp_mode') || 'rel';
+let tpNormX = 0.5, tpNormY = 0.5;
 let tpStart = null, tpLast = null, tpDist = 0, tpMoved = false;
 let tpTwoStart = null, tpTwoLast = null;
+let tpLongPressTimer = null;
 let tpPendingMove = null, tpRaf = null;
+
+const DESCS = {
+  rel: 'Drag anywhere to move the mouse pointer. Tap to left-click, tap with two fingers to right-click, swipe with two fingers to scroll.',
+  abs: 'Tap directly on the desktop to click at that point. Drag to move pointer directly, touch and hold to right-click.'
+};
+
+function setTpMode(mode) {
+  tpMode = (mode === 'abs' ? 'abs' : 'rel');
+  try { localStorage.setItem('inkcast.tp_mode', tpMode); } catch(e){}
+  $('radioRel').checked = (tpMode === 'rel');
+  $('radioAbs').checked = (tpMode === 'abs');
+  $('crd-desc').textContent = DESCS[tpMode] || DESCS.rel;
+  $('tpModeIcon').textContent = (tpMode === 'rel' ? '🖱️' : '👆');
+  $('tpModeText').textContent = (tpMode === 'rel' ? 'Trackpad' : 'Direct Touch');
+  ui();
+}
+$('radioRel').onchange = () => setTpMode('rel');
+$('radioAbs').onchange = () => setTpMode('abs');
+$('tpConfig').onclick = () => { $('touch-config-modal').style.display = 'flex'; };
+$('closeTouchConfig').onclick = () => { $('touch-config-modal').style.display = 'none'; };
+$('touch-config-modal').onclick = e => {
+  if (e.target === $('touch-config-modal')) $('touch-config-modal').style.display = 'none';
+};
+setTpMode(tpMode);
+
+function getStageRect() {
+  const r = stage.getBoundingClientRect();
+  return { left: r.left, top: r.top, width: Math.max(1, r.width), height: Math.max(1, r.height) };
+}
+
+function updateCursorUI() {
+  const curEl = $('mouse-cursor');
+  if (!curEl) return;
+  if (S.tool === 'trackpad') {
+    curEl.style.display = 'block';
+    curEl.style.left = (tpNormX * sw) + 'px';
+    curEl.style.top = (tpNormY * sh) + 'px';
+  } else {
+    curEl.style.display = 'none';
+  }
+}
+
+function showClickRipple(xNorm, yNorm, type='left') {
+  const r = document.createElement('div');
+  r.className = 'click-ripple ripple-' + type;
+  r.style.left = (xNorm * sw) + 'px';
+  r.style.top = (yNorm * sh) + 'px';
+  stage.appendChild(r);
+  setTimeout(() => { if (r.parentNode) r.parentNode.removeChild(r); }, 400);
+}
 
 function promptPin() {
   $('pinmodal').style.display = 'flex';
@@ -2198,30 +2309,12 @@ function flushMouseMove() {
 
 function queueMouseMove(msg) {
   tpPendingMove = msg;
-  if (!tpRaf) {
-    tpRaf = requestAnimationFrame(flushMouseMove);
-  }
+  if (!tpRaf) tpRaf = requestAnimationFrame(flushMouseMove);
 }
 
-$('hudPrev').onclick = () => sendSlide('prev', true);
-$('hudNext').onclick = () => sendSlide('next', true);
-$('hudMode').onclick = () => {
-  tpMode = (tpMode === 'rel' ? 'abs' : 'rel');
-  $('hudMode').textContent = (tpMode === 'rel' ? '🖱️ Rel' : '🎯 Direct');
-};
-$('hudMin').onclick = () => {
-  $('hud-full').style.display = 'none';
-  $('hud-mini').style.display = 'flex';
-};
-$('hud-mini').onclick = () => {
-  $('hud-mini').style.display = 'none';
-  $('hud-full').style.display = 'flex';
-};
-$('hudExit').onclick = () => {
-  $('hud').style.display = 'none';
-  const cr = $('cur-ring'); if (cr) cr.style.display = 'none';
-  setTool(prevTool || 'pen');
-};
+$('tpPrev').onclick = () => sendSlide('prev', true);
+$('tpNext').onclick = () => sendSlide('next', true);
+$('tpExit').onclick = () => setTool(prevTool || 'pen');
 
 $('pincancel').onclick = () => {
   $('pinmodal').style.display = 'none';
@@ -2233,65 +2326,103 @@ $('pinsubmit').onclick = () => {
   sendNow({ t: 'auth', pin: pin });
 };
 
-stage.addEventListener('touchstart', e => {
-  if (S.tool !== 'trackpad') return;
+function isOverlayTouch(e) {
+  return !!(e.target.closest && e.target.closest('#tp-topbar, #touch-config-modal, #pinmodal, #toast'));
+}
+
+document.addEventListener('touchstart', e => {
+  if (S.tool !== 'trackpad' || isOverlayTouch(e)) return;
   if (e.touches.length === 1) {
     const t = e.touches[0];
     tpStart = { x: t.clientX, y: t.clientY, time: Date.now() };
     tpLast = { x: t.clientX, y: t.clientY };
     tpDist = 0;
     tpMoved = false;
+    clearTimeout(tpLongPressTimer);
+    if (tpMode === 'abs') {
+      tpLongPressTimer = setTimeout(() => {
+        if (!tpMoved && tpMode === 'abs') {
+          const rect = getStageRect();
+          tpNormX = Math.max(0, Math.min(1, (tpStart.x - rect.left) / rect.width));
+          tpNormY = Math.max(0, Math.min(1, (tpStart.y - rect.top) / rect.height));
+          updateCursorUI();
+          showClickRipple(tpNormX, tpNormY, 'right');
+          sendNow({ t: 'mouse', action: 'move_abs', x: tpNormX, y: tpNormY });
+          sendNow({ t: 'mouse', action: 'click', btn: 'right' });
+          tpMoved = true;
+        }
+      }, 500);
+    }
   } else if (e.touches.length === 2) {
+    clearTimeout(tpLongPressTimer);
     tpTwoStart = { y: (e.touches[0].clientY + e.touches[1].clientY) / 2, time: Date.now() };
     tpTwoLast = tpTwoStart.y;
   }
 }, { passive: false });
 
-stage.addEventListener('touchmove', e => {
-  if (S.tool !== 'trackpad') return;
+document.addEventListener('touchmove', e => {
+  if (S.tool !== 'trackpad' || isOverlayTouch(e)) return;
   e.preventDefault();
   if (e.touches.length === 1 && tpLast) {
     const t = e.touches[0];
     const dx = t.clientX - tpLast.x;
     const dy = t.clientY - tpLast.y;
     tpDist += Math.hypot(dx, dy);
-    if (tpDist > 4) tpMoved = true;
+    if (tpDist > 5) {
+      tpMoved = true;
+      clearTimeout(tpLongPressTimer);
+    }
     tpLast = { x: t.clientX, y: t.clientY };
 
+    const rect = getStageRect();
     if (tpMode === 'rel') {
-      const vdx = dx / Math.max(1, stage.clientWidth);
-      const vdy = dy / Math.max(1, stage.clientHeight);
-      queueMouseMove({ t: 'mouse', action: 'move_rel', dx: vdx, dy: vdy });
-    } else if (tpMode === 'abs' && crect) {
-      const nx = (t.clientX - crect.x) / crect.w;
-      const ny = (t.clientY - crect.y) / crect.h;
-      queueMouseMove({ t: 'mouse', action: 'move_abs', x: nx, y: ny });
+      const sens = 1.35;
+      const ndx = (dx * sens) / rect.width;
+      const ndy = (dy * sens) / rect.height;
+      tpNormX = Math.max(0, Math.min(1, tpNormX + ndx));
+      tpNormY = Math.max(0, Math.min(1, tpNormY + ndy));
+      updateCursorUI();
+      queueMouseMove({ t: 'mouse', action: 'move_rel', dx: ndx, dy: ndy });
+    } else if (tpMode === 'abs') {
+      tpNormX = Math.max(0, Math.min(1, (t.clientX - rect.left) / rect.width));
+      tpNormY = Math.max(0, Math.min(1, (t.clientY - rect.top) / rect.height));
+      updateCursorUI();
+      queueMouseMove({ t: 'mouse', action: 'move_abs', x: tpNormX, y: tpNormY });
     }
   } else if (e.touches.length === 2 && tpTwoLast !== null) {
+    clearTimeout(tpLongPressTimer);
     const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
     const dScroll = cy - tpTwoLast;
     tpTwoLast = cy;
-    queueMouseMove({ t: 'mouse', action: 'scroll', dy: Math.round(dScroll * 4) });
+    queueMouseMove({ t: 'mouse', action: 'scroll', dy: Math.round(dScroll * 3) });
   }
 }, { passive: false });
 
-stage.addEventListener('touchend', e => {
-  if (S.tool !== 'trackpad') return;
+document.addEventListener('touchend', e => {
+  if (S.tool !== 'trackpad' || isOverlayTouch(e)) return;
+  clearTimeout(tpLongPressTimer);
   if (e.touches.length === 0 && tpStart) {
     const elapsed = Date.now() - tpStart.time;
-    if (!tpMoved && elapsed < 320) {
-      if (tpMode === 'abs' && crect) {
-        const nx = (tpStart.x - crect.x) / crect.w;
-        const ny = (tpStart.y - crect.y) / crect.h;
-        sendNow({ t: 'mouse', action: 'move_abs', x: nx, y: ny });
+    if (!tpMoved && elapsed < 350) {
+      if (tpMode === 'rel') {
+        showClickRipple(tpNormX, tpNormY, 'left');
+        sendNow({ t: 'mouse', action: 'click', btn: 'left' });
+      } else if (tpMode === 'abs') {
+        const rect = getStageRect();
+        tpNormX = Math.max(0, Math.min(1, (tpStart.x - rect.left) / rect.width));
+        tpNormY = Math.max(0, Math.min(1, (tpStart.y - rect.top) / rect.height));
+        updateCursorUI();
+        showClickRipple(tpNormX, tpNormY, 'left');
+        sendNow({ t: 'mouse', action: 'move_abs', x: tpNormX, y: tpNormY });
+        sendNow({ t: 'mouse', action: 'click', btn: 'left' });
       }
-      sendNow({ t: 'mouse', action: 'click', btn: 'left' });
     }
     tpStart = null;
     tpLast = null;
   } else if (e.touches.length === 0 && tpTwoStart) {
     const elapsed = Date.now() - tpTwoStart.time;
     if (Math.abs(tpTwoLast - tpTwoStart.y) < 15 && elapsed < 350) {
+      showClickRipple(tpNormX, tpNormY, 'right');
       sendNow({ t: 'mouse', action: 'click', btn: 'right' });
     }
     tpTwoStart = null;
@@ -2301,7 +2432,9 @@ stage.addEventListener('touchend', e => {
 
 // ---------------- layout
 function layout(){
-  const L = 62, T = 54, W = innerWidth - L, Hh = innerHeight - T;
+  const isTp = (S.tool === 'trackpad');
+  const L = isTp ? 0 : 62, T = isTp ? 0 : 54;
+  const W = innerWidth - L, Hh = innerHeight - T;
   let w = W, h = W/aspect; if (h > Hh) { h = Hh; w = Hh*aspect; }
   sw = w; sh = h;
   Object.assign(stage.style, {left:(L+(W-w)/2)+'px', top:(T+(Hh-h)/2)+'px', width:w+'px', height:h+'px'});
@@ -2309,6 +2442,7 @@ function layout(){
   cv.width = base.width = Math.round(w*dpr); cv.height = base.height = Math.round(h*dpr);
   if (editor) placeEditor();
   baseDirty = needDraw = true;
+  updateCursorUI();
 }
 addEventListener('resize', layout);
 
@@ -2618,22 +2752,18 @@ function connect(){
       $('pinmodal').style.display = 'none';
       toast('Unlocked host control');
       if (S.tool === 'trackpad') {
-        $('hud').style.display = 'block';
-        $('hud-full').style.display = 'flex';
-        $('hud-mini').style.display = 'none';
+        layout();
+        ui();
       }
     } else if (m.t === 'auth_err') {
       $('pinerr').textContent = m.msg || 'Authentication failed';
     } else if (m.t === 'mouse_state') {
       mouseEnabled = !!m.enabled;
       if (!mouseEnabled && S.tool === 'trackpad') toast('Host disabled remote mouse');
-    } else if (m.t === 'cur' && S.tool === 'trackpad') {
-      const r = $('cur-ring');
-      if (r && crect) {
-        r.style.display = 'block';
-        r.style.left = (crect.x + m.x * crect.w) + 'px';
-        r.style.top = (crect.y + m.y * crect.h) + 'px';
-      }
+    } else if (m.t === 'cur') {
+      tpNormX = m.x;
+      tpNormY = m.y;
+      if (S.tool === 'trackpad') updateCursorUI();
     } else if (m.t === 'cmd') runCmd(m);
     else if (m.t === 'toast') toast(m.msg);
   };
