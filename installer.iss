@@ -11,7 +11,7 @@
 ;   [ ] Desktop shortcut               (default off)
 
 #define AppName      "InkCast"
-#define AppVersion   "1.0"
+#define AppVersion   "2.2"
 #define AppPublisher "InkCast"
 #define AppExeName   "InkCast.exe"
 #define SourceDir    "dist"
