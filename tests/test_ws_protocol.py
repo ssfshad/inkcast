@@ -25,6 +25,12 @@ class TestWsProtocol(unittest.TestCase):
         res = server.handle_mouse_msg({"t": "mouse", "action": "move_rel", "dx": 0, "dy": 0}, is_authorized=False)
         self.assertFalse(res)
 
+        # Test slide enter key support
+        server.exec = MagicMock()
+        server.loop = MagicMock()
+        server.slide("enter")
+        server.loop.run_in_executor.assert_called_once()
+
 if __name__ == "__main__":
     unittest.main()
 

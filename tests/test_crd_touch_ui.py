@@ -9,6 +9,10 @@ class TestCrdTouchUI(unittest.TestCase):
         self.assertIn('id="tp-topbar"', page)
         self.assertIn('id="tpPrev"', page)
         self.assertIn('id="tpNext"', page)
+        self.assertIn('id="tpEnter"', page)
+        self.assertIn('id="tpInkBtn"', page)
+        self.assertIn('id="tpUndo"', page)
+        self.assertIn('class="tp-drag-handle"', page)
         self.assertIn('id="tpConfig"', page)
         self.assertIn('id="tpExit"', page)
         
@@ -20,8 +24,9 @@ class TestCrdTouchUI(unittest.TestCase):
         self.assertIn('id="closeTouchConfig"', page)
         self.assertIn('id="crd-desc"', page)
         
-        # Verify crisp mouse cursor and click ripples
+        # Verify crisp compact mouse cursor (16px) and click ripples
         self.assertIn('id="mouse-cursor"', page)
+        self.assertIn('width="16"', page)
         self.assertIn('click-ripple', page)
         self.assertIn('ripple-left', page)
         self.assertIn('ripple-right', page)
@@ -35,3 +40,4 @@ class TestCrdTouchUI(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+

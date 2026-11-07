@@ -977,7 +977,7 @@ class Server:
         return False
 
     def slide(self, direction):
-        if direction in ("next", "prev"):
+        if direction in ("next", "prev", "enter", "space"):
             self.loop.run_in_executor(self.exec, trigger_slide, direction)
 
     # ---- http / websocket
@@ -1164,8 +1164,15 @@ def trigger_slide(direction: str):
             except Exception:
                 pass
             time.sleep(0.02)
-        # Page Down (0x22) for next, Page Up (0x21) for previous
-        vk = 0x22 if direction == "next" else 0x21
+        # Page Down (0x22) for next, Page Up (0x21) for previous, Return (0x0D) for enter
+        if direction == "enter":
+            vk = 0x0D
+        elif direction == "space":
+            vk = 0x20
+        elif direction == "prev":
+            vk = 0x21
+        else:
+            vk = 0x22
         KEYEVENTF_KEYUP = 0x0002
         KEYEVENTF_EXTENDEDKEY = 0x0001
         user32.keybd_event(vk, 0, KEYEVENTF_EXTENDEDKEY, 0)
@@ -1799,17 +1806,22 @@ html,body{margin:0;height:100%;background:#000;color:var(--fg);overflow:hidden;o
 #pasteclose{margin-top:12px;width:100%;height:40px;border-radius:10px;border:0;background:var(--btn);color:var(--fg);font-size:15px}
 input[type=file]{display:none}
 #mouse-cursor{display:none;position:absolute;left:0;top:0;pointer-events:none;z-index:90;transform:translate(-1px,-1px);will-change:left,top}
-#mouse-cursor svg{filter:drop-shadow(0 2px 5px rgba(0,0,0,0.75));display:block}
-.click-ripple{position:absolute;width:36px;height:36px;margin-left:-18px;margin-top:-18px;border-radius:50%;pointer-events:none;z-index:92;animation:click-ripple-anim .35s cubic-bezier(0.1,0.8,0.3,1) forwards}
-.ripple-left{border:3px solid #0a84ff;background:rgba(10,132,255,0.35)}
-.ripple-right{border:3px solid #ff9f0a;background:rgba(255,159,10,0.35)}
+#mouse-cursor svg{filter:drop-shadow(0 1.5px 3.5px rgba(0,0,0,0.8));display:block}
+.click-ripple{position:absolute;width:26px;height:26px;margin-left:-13px;margin-top:-13px;border-radius:50%;pointer-events:none;z-index:92;animation:click-ripple-anim .35s cubic-bezier(0.1,0.8,0.3,1) forwards}
+.ripple-left{border:2.5px solid #0a84ff;background:rgba(10,132,255,0.35)}
+.ripple-right{border:2.5px solid #ff9f0a;background:rgba(255,159,10,0.35)}
 @keyframes click-ripple-anim{0%{transform:scale(0.2);opacity:1}100%{transform:scale(1.6);opacity:0}}
-#tp-topbar{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:95;display:flex;align-items:center;gap:4px;background:rgba(28,28,30,0.88);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);padding:4px 8px;border-radius:20px;border:1px solid rgba(255,255,255,0.18);box-shadow:0 6px 24px rgba(0,0,0,0.5)}
-.tp-btn{background:transparent;border:none;color:#fff;font-size:13px;font-weight:600;padding:6px 12px;border-radius:14px;cursor:pointer;display:flex;align-items:center;gap:5px;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+#tp-topbar{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:95;display:flex;align-items:center;gap:3px;background:rgba(28,28,30,0.88);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);padding:3px 6px;border-radius:20px;border:1px solid rgba(255,255,255,0.18);box-shadow:0 6px 24px rgba(0,0,0,0.5);touch-action:none}
+@media (orientation: landscape) {
+  #tp-topbar{top:12px;right:16px;left:auto;transform:none}
+}
+.tp-btn{background:transparent;border:none;color:#fff;font-size:12px;font-weight:600;padding:5px 9px;border-radius:12px;cursor:pointer;display:flex;align-items:center;gap:4px;user-select:none;-webkit-user-select:none;touch-action:manipulation}
 .tp-btn:active{background:rgba(255,255,255,0.2);transform:scale(0.96)}
-.tp-mode-btn{background:rgba(255,255,255,0.1);padding:6px 10px}
-.tp-exit-btn{color:#ff453a;font-size:14px;padding:6px 10px}
-.tp-vsep{width:1px;height:18px;background:rgba(255,255,255,0.2);margin:0 2px}
+.tp-btn.active{background:rgba(10,132,255,0.85);color:#fff}
+.tp-drag-handle{color:rgba(255,255,255,0.45);cursor:grab;padding:0 5px;font-size:13px;letter-spacing:-1px;user-select:none;-webkit-user-select:none;touch-action:none}
+.tp-mode-btn{background:rgba(255,255,255,0.1);padding:5px 8px}
+.tp-exit-btn{color:#ff453a;font-size:13px;padding:5px 8px}
+.tp-vsep{width:1px;height:16px;background:rgba(255,255,255,0.2);margin:0 1px}
 .modal-wrap{position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:100;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
 .modal-box{background:#1e2023;border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:20px;width:280px;text-align:center;color:#fff;box-shadow:0 8px 32px rgba(0,0,0,0.5)}
 .modal-err{color:#ff453a;font-size:12px;min-height:16px;margin:4px 0}
@@ -1834,17 +1846,21 @@ input[type=file]{display:none}
 </style></head><body>
 <div id="side"></div>
 <div id="top"></div>
-<div id="stage"><img id="bg" alt=""><canvas id="cv"></canvas><div id="mouse-cursor"><svg viewBox="0 0 24 24" width="24" height="24"><path d="M1 1l13 10.2-6.2 1.2 3.6 6.8-2.6 1.4-3.6-6.8L1 18.5V1z" fill="#ffffff" stroke="#1c1c1e" stroke-width="1.4" stroke-linejoin="round"/></svg></div><textarea id="ed" rows="1" autocapitalize="sentences" spellcheck="false"></textarea></div>
+<div id="stage"><img id="bg" alt=""><canvas id="cv"></canvas><div id="mouse-cursor"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M1 1l13 10.2-6.2 1.2 3.6 6.8-2.6 1.4-3.6-6.8L1 18.5V1z" fill="#ffffff" stroke="#1c1c1e" stroke-width="1.4" stroke-linejoin="round"/></svg></div><textarea id="ed" rows="1" autocapitalize="sentences" spellcheck="false"></textarea></div>
 <div id="hint"></div>
 <div id="toast"></div>
 <div id="tp-topbar" style="display:none;">
+  <div class="tp-drag-handle" id="tpDrag" title="Drag to move">⋮⋮</div>
   <button class="tp-btn" id="tpPrev" title="Previous Slide">◀</button>
   <button class="tp-btn" id="tpNext" title="Next Slide">▶</button>
+  <button class="tp-btn" id="tpEnter" title="Enter / Confirm">↵</button>
+  <div class="tp-vsep"></div>
+  <button class="tp-btn" id="tpInkBtn" title="Toggle Draw / Annotate">✏️</button>
+  <button class="tp-btn" id="tpUndo" title="Undo Annotation" style="display:none;">↶</button>
   <div class="tp-vsep"></div>
   <button class="tp-btn tp-mode-btn" id="tpConfig" title="Configure Touch Input">
     <span id="tpModeIcon">🖱️</span>
-    <span id="tpModeText">Trackpad</span>
-    <span style="font-size:10px;opacity:0.7;margin-left:2px;">▾</span>
+    <span style="font-size:9px;opacity:0.7;margin-left:1px;">▾</span>
   </button>
   <div class="tp-vsep"></div>
   <button class="tp-btn tp-exit-btn" id="tpExit" title="Exit Remote Control">✕</button>
@@ -2157,6 +2173,9 @@ function setTool(t){
   if (t!=='laser' && t!=='trackpad') prevTool = t;
   const changed = (S.tool !== t);
   if (t === 'trackpad') {
+    tpAction = 'mouse';
+    const inkBtn = $('tpInkBtn'); if (inkBtn) inkBtn.classList.remove('active');
+    const undoBtn = $('tpUndo'); if (undoBtn) undoBtn.style.display = 'none';
     if (page !== 'screen') setPage('screen');
     if (!S.live) { S.live = true; save(); updBg(); reqFrame(); }
   }
@@ -2216,8 +2235,12 @@ function ui(){
     } else {
       $('tp-topbar').style.display = 'flex';
     }
-    h = tpMode === 'rel' ? 'Trackpad: drag to move · tap to left-click · 2-finger tap right-click · 2-finger scroll'
-                         : 'Direct touch: tap screen to click · touch & hold to right-click';
+    if (tpAction === 'ink') {
+      h = 'Inking active · draw on slides with finger or stylus · tap ✏️ for mouse control';
+    } else {
+      h = tpMode === 'rel' ? 'Trackpad: drag to move · tap to left-click · 2-finger tap right-click · 2-finger scroll'
+                           : 'Direct touch: tap screen to click · touch & hold to right-click';
+    }
   } else {
     side.style.display = 'flex';
     topBar.style.display = 'flex';
@@ -2236,6 +2259,7 @@ function ui(){
 // ---------------- trackpad, touch config & pin auth
 let authRequired = false, authToken = localStorage.getItem('inkcast.auth_token') || '', mouseEnabled = true;
 let tpMode = localStorage.getItem('inkcast.tp_mode') || 'rel';
+let tpAction = 'mouse';
 let tpNormX = 0.5, tpNormY = 0.5;
 let tpStart = null, tpLast = null, tpDist = 0, tpMoved = false;
 let tpTwoStart = null, tpTwoLast = null;
@@ -2254,7 +2278,6 @@ function setTpMode(mode) {
   $('radioAbs').checked = (tpMode === 'abs');
   $('crd-desc').textContent = DESCS[tpMode] || DESCS.rel;
   $('tpModeIcon').textContent = (tpMode === 'rel' ? '🖱️' : '👆');
-  $('tpModeText').textContent = (tpMode === 'rel' ? 'Trackpad' : 'Direct Touch');
   ui();
 }
 $('radioRel').onchange = () => setTpMode('rel');
@@ -2266,6 +2289,21 @@ $('touch-config-modal').onclick = e => {
 };
 setTpMode(tpMode);
 
+function setTpAction(act) {
+  tpAction = act;
+  const inkBtn = $('tpInkBtn');
+  const undoBtn = $('tpUndo');
+  if (inkBtn) inkBtn.classList.toggle('active', tpAction === 'ink');
+  if (undoBtn) undoBtn.style.display = (tpAction === 'ink' ? 'flex' : 'none');
+  const curEl = $('mouse-cursor');
+  if (curEl && tpAction === 'ink') curEl.style.display = 'none';
+  else if (curEl && S.tool === 'trackpad') curEl.style.display = 'block';
+  toast(tpAction === 'ink' ? 'Draw mode active (tap ✏️ for mouse)' : 'Mouse control active');
+  ui();
+}
+$('tpInkBtn').onclick = () => setTpAction(tpAction === 'ink' ? 'mouse' : 'ink');
+$('tpUndo').onclick = () => undo();
+
 function getStageRect() {
   const r = stage.getBoundingClientRect();
   return { left: r.left, top: r.top, width: Math.max(1, r.width), height: Math.max(1, r.height) };
@@ -2274,7 +2312,7 @@ function getStageRect() {
 function updateCursorUI() {
   const curEl = $('mouse-cursor');
   if (!curEl) return;
-  if (S.tool === 'trackpad') {
+  if (S.tool === 'trackpad' && tpAction !== 'ink') {
     curEl.style.display = 'block';
     curEl.style.left = (tpNormX * sw) + 'px';
     curEl.style.top = (tpNormY * sh) + 'px';
@@ -2314,7 +2352,35 @@ function queueMouseMove(msg) {
 
 $('tpPrev').onclick = () => sendSlide('prev', true);
 $('tpNext').onclick = () => sendSlide('next', true);
+$('tpEnter').onclick = () => sendSlide('enter', true);
 $('tpExit').onclick = () => setTool(prevTool || 'pen');
+
+const tpBar = $('tp-topbar');
+let tpBarDragging = false, tpBarStartX = 0, tpBarStartY = 0;
+$('tpDrag').addEventListener('touchstart', e => {
+  if (e.touches.length === 1) {
+    tpBarDragging = true;
+    const t = e.touches[0];
+    const r = tpBar.getBoundingClientRect();
+    tpBarStartX = t.clientX - r.left;
+    tpBarStartY = t.clientY - r.top;
+    e.preventDefault();
+  }
+}, { passive: false });
+document.addEventListener('touchmove', e => {
+  if (!tpBarDragging) return;
+  const t = e.touches[0];
+  let x = t.clientX - tpBarStartX;
+  let y = t.clientY - tpBarStartY;
+  x = Math.max(4, Math.min(innerWidth - tpBar.offsetWidth - 4, x));
+  y = Math.max(4, Math.min(innerHeight - tpBar.offsetHeight - 4, y));
+  tpBar.style.left = x + 'px';
+  tpBar.style.top = y + 'px';
+  tpBar.style.right = 'auto';
+  tpBar.style.transform = 'none';
+  e.preventDefault();
+}, { passive: false });
+document.addEventListener('touchend', () => { tpBarDragging = false; });
 
 $('pincancel').onclick = () => {
   $('pinmodal').style.display = 'none';
@@ -2332,6 +2398,7 @@ function isOverlayTouch(e) {
 
 document.addEventListener('touchstart', e => {
   if (S.tool !== 'trackpad' || isOverlayTouch(e)) return;
+  if (tpAction === 'ink') return; // let canvas pointer events handle drawing
   if (e.touches.length === 1) {
     const t = e.touches[0];
     tpStart = { x: t.clientX, y: t.clientY, time: Date.now() };
@@ -2362,6 +2429,7 @@ document.addEventListener('touchstart', e => {
 
 document.addEventListener('touchmove', e => {
   if (S.tool !== 'trackpad' || isOverlayTouch(e)) return;
+  if (tpAction === 'ink') return; // let canvas pointer events handle drawing
   e.preventDefault();
   if (e.touches.length === 1 && tpLast) {
     const t = e.touches[0];
@@ -2400,6 +2468,7 @@ document.addEventListener('touchmove', e => {
 
 document.addEventListener('touchend', e => {
   if (S.tool !== 'trackpad' || isOverlayTouch(e)) return;
+  if (tpAction === 'ink') return; // let canvas pointer events handle drawing
   clearTimeout(tpLongPressTimer);
   if (e.touches.length === 0 && tpStart) {
     const elapsed = Date.now() - tpStart.time;
@@ -2848,20 +2917,21 @@ function accept(e){
     if (!S.fingersSet && S.fingers) { S.fingers = false; toast('Pencil detected: fingers won’t draw now (palm rejection). Tap “Fingers” to change.'); }
     save(); ui();
   }
-  if (e.pointerType==='touch' && !S.fingers) return false;
+  if (e.pointerType==='touch' && !S.fingers && !(S.tool === 'trackpad' && tpAction === 'ink')) return false;
   if (e.pointerType==='mouse' && e.button!==0) return false;
   return pid===null;
 }
 function pushHist(h){ hist.push(h); if (hist.length>300) hist.shift(); redoS.length = 0; ui(); }
 
 cv.addEventListener('pointerdown', e => {
-  if (S.tool === 'trackpad') return;
+  const isTp = (S.tool === 'trackpad');
+  if (isTp && tpAction !== 'ink' && e.pointerType !== 'pen') return;
   if (!accept(e)) return;
   e.preventDefault();
   if (editor) { commitEditor(); return; }
   pid = e.pointerId; crect = cv.getBoundingClientRect();
   try { cv.setPointerCapture(pid); } catch(_){}
-  const p = pt(e), t = S.tool;
+  const p = pt(e), t = isTp ? (prevTool && prevTool!=='trackpad' ? prevTool : 'pen') : S.tool;
   if (STROKE[t]) {
     cur = {id:uid(), k:t, c:S.color, w:S.size*WMUL[t], pts:[p]};
     if (t==='laser') lasers.push(cur); else items.push(cur);
