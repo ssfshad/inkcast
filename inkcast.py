@@ -30,6 +30,8 @@ from PySide6.QtGui import (QAction, QColor, QFont, QGuiApplication, QIcon, QImag
 from PySide6.QtWidgets import QApplication, QLabel, QMenu, QSystemTrayIcon, QVBoxLayout, QWidget
 
 APP = "InkCast"
+# folder with the launchers (InkCast USB.bat, camera\): next to InkCast.exe when packaged, else next to this file
+APP_DIR = os.path.dirname(sys.executable if getattr(sys, "frozen", False) else os.path.abspath(__file__))
 PORT = int(os.environ.get("INKCAST_PORT") or "8765")  # change with: setx INKCAST_PORT 6969
 REF = 1920.0                      # sizes are defined relative to a 1920px-wide screen
 STROKES = {"pen", "marker", "hl", "neon", "laser", "farrow"}
@@ -1076,7 +1078,7 @@ def main():
         toggle.setText(("Hide ink" if overlay.isVisible() else "Show ink") + "\tCtrl+Alt+H")
 
     toggle.triggered.connect(toggle_ink)
-    cam_bat = os.path.join(os.path.dirname(os.path.abspath(__file__)), "camera", "InkCast Camera.bat")
+    cam_bat = os.path.join(APP_DIR, "camera", "InkCast Camera.bat")
     camera = QAction("Phone camera (USB)...")
 
     def start_camera():
@@ -1087,7 +1089,7 @@ def main():
 
     camera.triggered.connect(start_camera)
     camera.setVisible(os.path.isfile(cam_bat))
-    usb_bat = os.path.join(os.path.dirname(os.path.abspath(__file__)), "InkCast USB.bat")
+    usb_bat = os.path.join(APP_DIR, "InkCast USB.bat")
     usb = QAction("Android tablet over USB...")
 
     def start_usb():
@@ -1453,9 +1455,9 @@ $('fingB').onclick = () => {
   toast(S.fingers ? 'Fingers can draw' : 'Only the pencil draws (palm rejection on)');
 };
 
-function toast(msg){
+function toast(msg, ms=2600){
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
-  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2600);
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), ms);
 }
 function setTool(t){
   if (editor) commitEditor();
@@ -1551,9 +1553,14 @@ function cancelPointer(){   // a second finger landed mid-stroke: drop whatever 
   pid = null; pidType = null; crect = null; erase = null; marq = null; drag = null; downPt = null;
   needDraw = baseDirty = true;
 }
+// quick tap with 2 fingers = undo, 3 fingers = redo (only if the fingers barely moved)
+let tap = null;
+const TAP_MS = 350, TAP_MOVE = 14;
 function touchDown(e){   // returns true when the touch was taken by zoom/pan and must not draw
   if (pid !== null && pidType === 'pen') return true;   // palm resting while writing
   touches.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  if (touches.size === 1) tap = {t0:performance.now(), n:0, moved:false, z:zoom, zx, zy, start:new Map()};
+  if (tap) { tap.start.set(e.pointerId, {x:e.clientX, y:e.clientY}); tap.n = Math.max(tap.n, touches.size); }
   try { cv.setPointerCapture(e.pointerId); } catch(_){}
   if (touches.size === 2) { cancelPointer(); pan = null; pinchStart(); return true; }
   if (touches.size > 2) return true;
@@ -1563,6 +1570,8 @@ function touchDown(e){   // returns true when the touch was taken by zoom/pan an
 function touchMove(e){
   const t = touches.get(e.pointerId); if (!t) return false;
   t.x = e.clientX; t.y = e.clientY;
+  const s0 = tap && tap.start.get(e.pointerId);
+  if (s0 && Math.hypot(t.x-s0.x, t.y-s0.y) > TAP_MOVE) tap.moved = true;
   if (pinch && touches.size >= 2) pinchMove();
   else if (pan) panMove(t);
   return e.pointerId !== pid;
@@ -1574,6 +1583,15 @@ function touchUp(e){
     const rest = [...touches.values()];
     if (rest.length === 1 && zoom > 1) panStart(rest[0]);   // keep panning with the finger still down
   } else if (pan && !touches.size) pan = null;
+  if (e.type === 'pointercancel') tap = null;
+  if (tap && !touches.size) {
+    const t = tap; tap = null;
+    if (!t.moved && t.n >= 2 && t.n <= 3 && performance.now() - t.t0 < TAP_MS) {
+      if (zoom !== t.z || zx !== t.zx || zy !== t.zy) { zoom = t.z; zx = t.zx; zy = t.zy; layout(); }  // undo the tiny pinch wobble
+      if (t.n === 2) { if (hist.length) { undo(); toast('Undo', 700); } }
+      else if (redoS.length) { redo(); toast('Redo', 700); }
+    }
+  }
   return e.pointerId !== pid;
 }
 addEventListener('gesturestart', e => e.preventDefault());

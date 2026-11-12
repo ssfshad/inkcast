@@ -4,3 +4,6 @@ __pycache__/
 camera/scrcpy/
 camera/.scrcpy-download/
 camera/camera-settings.bat
+build/
+dist/
+*.spec

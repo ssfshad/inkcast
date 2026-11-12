@@ -31,7 +31,7 @@ No tablet app to install. No subscription. No account.
 - **Select:** tap one thing, or draw a loop around several (the ends join up automatically, so a rough curve is enough). Then move them, resize them from the corner dots, or change their color, size or font together
 - **Colors:** a palette of quick colors plus a full color picker. Tap **+** to add a color, or tap the selected color again to change or delete it (up to 16 colors); your palette is remembered
 - **Whiteboard:** tap **Board** and pick a white, grid, black or green chalkboard board; each keeps its own drawings
-- **Undo / redo, eraser, clear**
+- **Undo / redo, eraser, clear.** Tap with **two fingers to undo** and **three fingers to redo**
 - **Works with fingers or a pencil.** When a pencil is detected, fingers stop drawing automatically so your palm can rest on the screen (toggle with **Fingers**)
 - **Pinch to zoom** with two fingers for fine detail, and drag with one finger (or two) to move around while zoomed; pinch back out to return to the full view
 - **Live screen preview** on the tablet so you can see where you're drawing
@@ -48,14 +48,29 @@ No tablet app to install. No subscription. No account.
 ## Requirements
 
 - Windows 10 or 11
-- [Python 3.10+](https://www.python.org/downloads/) (tick **"Add python.exe to PATH"** during install)
+- Nothing else if you use the [download](#easiest-download-inkcastexe). To run from source: [Python 3.10+](https://www.python.org/downloads/) (tick **"Add python.exe to PATH"** during install)
 - A tablet (iPad or Android) on the **same WiFi network** as the PC, using Safari, Chrome or another modern browser
 
 ## Getting started
 
+### Easiest: download InkCast.exe
+
+No Python, no terminal.
+
+1. **[Download InkCast-windows-x64.zip](https://github.com/ssfshad/inkcast/releases/latest/download/InkCast-windows-x64.zip)** from the latest release.
+2. Right-click the zip → **Extract All**, and open the `InkCast` folder.
+3. Double-click **`InkCast.exe`**.
+   - If Windows shows **"Windows protected your PC"**, click **More info → Run anyway**. This appears because InkCast is a new, free app without a paid code-signing certificate.
+   - If Windows asks about the firewall, click **Allow** so the tablet can connect.
+4. Scan the **QR code** with your tablet's camera and tap the link. The tablet must be on the same WiFi.
+
+Next time, just double-click `InkCast.exe` again. `InkCast USB.bat` and the `camera` folder are in the same place.
+
+### From source (with Python)
+
 **Before you start:** install [Python](https://www.python.org/downloads/) if you don't have it. On the first screen of the installer, tick **"Add python.exe to PATH"**.
 
-### First time (about 2 minutes)
+#### First time (about 2 minutes)
 
 1. **Make a folder** for InkCast anywhere, for example on your Desktop, and open it.
 2. **Open a terminal in that folder:** click the address bar at the top of the window, type `powershell`, and press **Enter**.
@@ -75,7 +90,7 @@ No tablet app to install. No subscription. No account.
 6. If Windows asks about the firewall, click **Allow**.
 7. InkCast opens a window with a **QR code**. **Scan it with your tablet's camera** and tap the link. Or type the address shown under it (like `http://192.168.0.105:8765`) into the tablet's browser. The tablet must be on the same WiFi. The window closes by itself once the tablet connects.
 
-### Every time after that
+#### Every time after that
 
 Open the `inkcast-main` folder and double-click **`Start InkCast.bat`**. No terminal needed.
 
@@ -209,6 +224,16 @@ Yes. InkCast's camera launcher streams your phone's camera to the PC over USB us
 
 **Does it work on Mac or Linux?**
 The PC side is built and tested for Windows 10 and 11. Most of it is cross-platform Python, but keyboard shortcuts and fonts are Windows-specific for now.
+
+## Building InkCast.exe
+
+To build the download yourself, install [Python from python.org](https://www.python.org/downloads/) (not Anaconda) and run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging\build.ps1
+```
+
+It makes a clean environment in `build\`, then puts `InkCast.exe` in `dist\InkCast\` and the zip for a release in `dist\InkCast-windows-x64.zip`.
 
 ## How it works
 
