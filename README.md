@@ -33,13 +33,14 @@ No tablet app to install. No subscription. No account.
 - **Whiteboard:** tap **Board** and pick a white, grid, black or green chalkboard board; each keeps its own drawings
 - **Undo / redo, eraser, clear**
 - **Works with fingers or a pencil.** When a pencil is detected, fingers stop drawing automatically so your palm can rest on the screen (toggle with **Fingers**)
+- **Pinch to zoom** with two fingers for fine detail, and drag with one finger (or two) to move around while zoomed; pinch back out to return to the full view
 - **Live screen preview** on the tablet so you can see where you're drawing
 - **PC keyboard shortcuts** so you can control it without touching the tablet
 - **Phone camera over USB:** use your Android phone as a face cam or document cam, with no app on the phone ([details](#use-your-android-phone-as-a-camera-usb-no-app))
 
 | Circle to select | Edit many things at once |
 |---|---|
-| ![Circle selection](screenshots/lasso.png) | ![Selected items recolored](screenshots/select.png) |
+| ![Lasso selection](screenshots/lasso.png) | ![Selected items recolored](screenshots/select.png) |
 
 ![Whiteboard mode](screenshots/whiteboard.png)
 

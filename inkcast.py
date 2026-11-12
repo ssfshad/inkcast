@@ -34,7 +34,7 @@ PORT = int(os.environ.get("INKCAST_PORT", "8765"))
 REF = 1920.0                      # sizes are defined relative to a 1920px-wide screen
 STROKES = {"pen", "marker", "hl", "neon", "laser", "farrow"}
 SHAPES = {"line", "arrow", "rect", "ellipse"}
-LASER_HOLD, LASER_FADE = 0.6, 0.6  # seconds a laser line stays, then fades
+LASER_HOLD, LASER_FADE = 1.5, 0.6  # seconds laser ink stays after the last stroke, then fades
 PREVIEW_WIDTH = 1280               # width of the screen preview sent to the tablet
 PREVIEW_QUALITY = 55
 MAX_IMAGE = 1600                   # pasted/inserted images are scaled down to this
@@ -157,16 +157,41 @@ class Bridge(QObject):
     tablet = Signal()       # a tablet connected
 
 
+SMOOTH_K = (0.06, 0.24, 0.4, 0.24, 0.06)  # tablets report pen positions in whole pixels; this blurs the stairs out
+
+
+def smooth_pts(pts):
+    n = len(pts)
+    if n < 5:
+        return pts
+    out = [pts[0]]
+    for i in range(1, n - 1):
+        x = y = 0.0
+        for j, w in enumerate(SMOOTH_K):
+            q = pts[min(max(i + j - 2, 0), n - 1)]
+            x += q.x() * w
+            y += q.y() * w
+        out.append(QPointF(x, y))
+    out.append(pts[-1])
+    return out
+
+
 def smooth_path(pts):
+    """Catmull-Rom spline through the (de-staired) points: fast strokes with few samples still come out round."""
+    pts = smooth_pts(pts)
     path = QPainterPath(pts[0])
-    if len(pts) < 3:
+    n = len(pts)
+    if n < 3:
         for q in pts[1:]:
             path.lineTo(q)
         return path
-    for i in range(1, len(pts) - 1):
-        a, b = pts[i], pts[i + 1]
-        path.quadTo(a, QPointF((a.x() + b.x()) / 2.0, (a.y() + b.y()) / 2.0))
-    path.lineTo(pts[-1])
+    for i in range(n - 1):
+        p0 = pts[i - 1] if i > 0 else pts[0]
+        p1, p2 = pts[i], pts[i + 1]
+        p3 = pts[i + 2] if i + 2 < n else pts[n - 1]
+        c1 = QPointF(p1.x() + (p2.x() - p0.x()) / 6.0, p1.y() + (p2.y() - p0.y()) / 6.0)
+        c2 = QPointF(p2.x() - (p3.x() - p1.x()) / 6.0, p2.y() - (p3.y() - p1.y()) / 6.0)
+        path.cubicTo(c1, c2, p2)
     return path
 
 
@@ -290,6 +315,8 @@ class Overlay(QWidget):
         if t == "add":
             it = self._prep(dict(d["item"]))
             if it["k"] == "laser":
+                for l in self.lasers.values():  # keep earlier laser strokes while writing
+                    l["_end"] = None
                 self.lasers[it["id"]] = it
             else:
                 items[it["id"]] = it
@@ -341,7 +368,9 @@ class Overlay(QWidget):
             for i in self._ids(d):
                 self.snap.pop(i, None)
                 if i in self.lasers:
-                    self.lasers[i]["_end"] = time.monotonic()
+                    now = time.monotonic()
+                    for l in self.lasers.values():  # all laser strokes fade together
+                        l["_end"] = now
                 if i in self.live:
                     self.live.discard(i)
                     it = items.get(i)
@@ -357,6 +386,9 @@ class Overlay(QWidget):
                 self.live.discard(d["id"])
                 self.dirty = True
                 self._mark(self._rect_of(it))
+            lz = self.lasers.pop(d["id"], None)
+            if lz is not None:
+                self._mark(self._rect_of(lz))
         elif t == "clear":
             items.clear(); self.live.clear(); self.lasers.clear(); self.snap.clear()
             self.dirty = True
@@ -1148,7 +1180,7 @@ html,body{margin:0;height:100%;background:#000;color:var(--fg);overflow:hidden;o
 #status{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--mut);white-space:nowrap;flex:none;padding:0 4px 0 8px;font-size:12px}
 #led{width:9px;height:9px;border-radius:50%;background:#ff453a}
 #led.ok{background:#30d158}
-#stage{position:fixed;background:#1a1a1a;overflow:hidden}
+#stage{position:fixed;background:#1a1a1a;overflow:hidden;transform-origin:0 0}
 #bg,#cv{position:absolute;left:0;top:0;width:100%;height:100%}
 #bg{display:block;visibility:hidden}
 #ed{position:absolute;display:none;z-index:1;margin:0;padding:0 2px;border:1.5px dashed #0a84ff;border-radius:4px;outline:none;
@@ -1450,12 +1482,76 @@ function ui(){
 }
 
 // ---------------- layout
+// ---------------- pinch zoom / pan with fingers (a CSS transform on the stage; pen input maps through it)
+let zoom = 1, zx = 0, zy = 0, pinch = null, pan = null, pidType = null;
+const touches = new Map();
+const MAX_ZOOM = 8;
+function applyZoom(){ stage.style.transform = zoom===1 ? '' : `translate(${zx}px,${zy}px) scale(${zoom})`; }
+function clampPan(){
+  if (zoom === 1) { zx = zy = 0; return; }
+  zx = Math.min(0, Math.max(sw*(1-zoom), zx)); zy = Math.min(0, Math.max(sh*(1-zoom), zy));
+}
+function stageOrigin(){ return [parseFloat(stage.style.left)||0, parseFloat(stage.style.top)||0]; }
+function pinchStart(){
+  const [a, b] = [...touches.values()], [L0, T0] = stageOrigin();
+  pinch = {d0: Math.hypot(a.x-b.x, a.y-b.y) || 1, z0: zoom,
+           lx: ((a.x+b.x)/2 - L0 - zx)/zoom, ly: ((a.y+b.y)/2 - T0 - zy)/zoom};  // stage point under the fingers
+}
+function pinchMove(){
+  const [a, b] = [...touches.values()], [L0, T0] = stageOrigin();
+  zoom = Math.min(MAX_ZOOM, Math.max(1, pinch.z0 * Math.hypot(a.x-b.x, a.y-b.y) / pinch.d0));
+  if (zoom < 1.04) zoom = 1;
+  zx = (a.x+b.x)/2 - L0 - zoom*pinch.lx; zy = (a.y+b.y)/2 - T0 - zoom*pinch.ly;
+  clampPan(); applyZoom();
+}
+function panStart(t){ pan = {x:t.x, y:t.y, zx, zy}; }
+function panMove(t){ zx = pan.zx + t.x - pan.x; zy = pan.zy + t.y - pan.y; clampPan(); applyZoom(); }
+function cancelPointer(){   // a second finger landed mid-stroke: drop whatever that pointer was doing
+  if (pid === null) return;
+  try { cv.releasePointerCapture(pid); } catch(_){}
+  if (cur) {
+    const it = cur; cur = null;
+    if (it.k==='laser') { const i = lasers.indexOf(it); if (i >= 0) lasers.splice(i, 1); }
+    else { const i = items.indexOf(it); if (i >= 0) items.splice(i, 1); }
+    send({t:'del', id:it.id});
+  }
+  pid = null; pidType = null; crect = null; erase = null; marq = null; drag = null; downPt = null;
+  needDraw = baseDirty = true;
+}
+function touchDown(e){   // returns true when the touch was taken by zoom/pan and must not draw
+  if (pid !== null && pidType === 'pen') return true;   // palm resting while writing
+  touches.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  try { cv.setPointerCapture(e.pointerId); } catch(_){}
+  if (touches.size === 2) { cancelPointer(); pan = null; pinchStart(); return true; }
+  if (touches.size > 2) return true;
+  if (!S.fingers) { if (zoom > 1) panStart(touches.get(e.pointerId)); return true; }
+  return false;
+}
+function touchMove(e){
+  const t = touches.get(e.pointerId); if (!t) return false;
+  t.x = e.clientX; t.y = e.clientY;
+  if (pinch && touches.size >= 2) pinchMove();
+  else if (pan) panMove(t);
+  return e.pointerId !== pid;
+}
+function touchUp(e){
+  if (!touches.delete(e.pointerId)) return false;
+  if (pinch && touches.size < 2) {
+    pinch = null; layout();
+    const rest = [...touches.values()];
+    if (rest.length === 1 && zoom > 1) panStart(rest[0]);   // keep panning with the finger still down
+  } else if (pan && !touches.size) pan = null;
+  return e.pointerId !== pid;
+}
+addEventListener('gesturestart', e => e.preventDefault());
+
 function layout(){
   const L = 62, T = 54, W = innerWidth - L, Hh = innerHeight - T;
   let w = W, h = W/aspect; if (h > Hh) { h = Hh; w = Hh*aspect; }
   sw = w; sh = h;
   Object.assign(stage.style, {left:(L+(W-w)/2)+'px', top:(T+(Hh-h)/2)+'px', width:w+'px', height:h+'px'});
-  const dpr = devicePixelRatio || 1;
+  clampPan(); applyZoom();
+  const dpr = Math.min((devicePixelRatio || 1) * zoom, 4096 / w);  // more pixels when zoomed in so ink stays sharp
   cv.width = base.width = Math.round(w*dpr); cv.height = base.height = Math.round(h*dpr);
   if (editor) placeEditor();
   baseDirty = needDraw = true;
@@ -1463,17 +1559,30 @@ function layout(){
 addEventListener('resize', layout);
 
 // ---------------- rendering (mirrors the PC renderer)
+const SMOOTH_K = [0.06, 0.24, 0.4, 0.24, 0.06];  // mirrors the PC: blurs out whole-pixel stairs in pen input
+function smoothPts(pts){
+  const n = pts.length; if (n < 5) return pts;
+  const out = [pts[0]];
+  for (let i=1;i<n-1;i++) {
+    let x=0, y=0;
+    for (let j=0;j<5;j++) { const q = pts[Math.min(Math.max(i+j-2,0),n-1)]; x += q[0]*SMOOTH_K[j]; y += q[1]*SMOOTH_K[j]; }
+    out.push([x,y]);
+  }
+  out.push(pts[n-1]); return out;
+}
 function pathOf(c, pts, W, H){
   c.beginPath();
+  pts = smoothPts(pts);
   const n = pts.length;
   c.moveTo(pts[0][0]*W, pts[0][1]*H);
   if (n === 1) { c.lineTo(pts[0][0]*W+0.01, pts[0][1]*H); return; }
   if (n < 3) { c.lineTo(pts[1][0]*W, pts[1][1]*H); return; }
-  for (let i=1;i<n-1;i++) {
-    const x = pts[i][0]*W, y = pts[i][1]*H;
-    c.quadraticCurveTo(x, y, (x + pts[i+1][0]*W)/2, (y + pts[i+1][1]*H)/2);
+  // Catmull-Rom spline through every point: fast strokes with few samples still come out round
+  for (let i=0;i<n-1;i++) {
+    const p0 = pts[i>0?i-1:0], p1 = pts[i], p2 = pts[i+1], p3 = pts[i+2<n?i+2:n-1];
+    c.bezierCurveTo((p1[0]+(p2[0]-p0[0])/6)*W, (p1[1]+(p2[1]-p0[1])/6)*H,
+                    (p2[0]-(p3[0]-p1[0])/6)*W, (p2[1]-(p3[1]-p1[1])/6)*H, p2[0]*W, p2[1]*H);
   }
-  c.lineTo(pts[n-1][0]*W, pts[n-1][1]*H);
 }
 function drawBoard(c, W, H){
   c.fillStyle = BGC[S.bg]; c.fillRect(0,0,W,H);
@@ -1557,9 +1666,9 @@ function render(){
   if (drag) for (const it of items) if (drag.set.has(it)) draw(ctx, it, W, Hc);
   if (cur && cur.k!=='laser') draw(ctx, cur, W, Hc, 1, cur._pred);
   const now = performance.now();
-  lasers = lasers.filter(l => !l._end || now - l._end < 1200);
+  lasers = lasers.filter(l => !l._end || now - l._end < 2100);
   for (const l of lasers) {
-    let f = 1; if (l._end) { const a = now - l._end - 600; if (a > 0) f = Math.max(0, 1 - a/600); }
+    let f = 1; if (l._end) { const a = now - l._end - 1500; if (a > 0) f = Math.max(0, 1 - a/600); }
     draw(ctx, l, W, Hc, f, l===cur ? l._pred : null);
   }
   drawMarq(W, Hc);
@@ -1848,15 +1957,16 @@ function accept(e){
 function pushHist(h){ hist.push(h); if (hist.length>300) hist.shift(); redoS.length = 0; ui(); }
 
 cv.addEventListener('pointerdown', e => {
+  if (e.pointerType==='touch' && touchDown(e)) { e.preventDefault(); return; }
   if (!accept(e)) return;
   e.preventDefault();
   if (editor) { commitEditor(); return; }
-  pid = e.pointerId; crect = cv.getBoundingClientRect();
+  pid = e.pointerId; pidType = e.pointerType; crect = cv.getBoundingClientRect();
   try { cv.setPointerCapture(pid); } catch(_){}
   const p = pt(e), t = S.tool;
   if (STROKE[t]) {
     cur = {id:uid(), k:t, c:S.color, w:S.size*WMUL[t], pts:[p]};
-    if (t==='laser') lasers.push(cur); else items.push(cur);
+    if (t==='laser') { for (const l of lasers) l._end = null; lasers.push(cur); } else items.push(cur);
     send({t:'add', item:{id:cur.id, k:t, c:cur.c, w:cur.w, pts:[p]}});
   } else if (SHAPE[t]) {
     cur = {id:uid(), k:t, c:S.color, w:S.size, a:p, b:p};
@@ -1875,6 +1985,7 @@ cv.addEventListener('pointerdown', e => {
   flush(); needDraw = true; ui();
 });
 cv.addEventListener('pointermove', e => {
+  if (e.pointerType==='touch' && touchMove(e)) return;
   if (e.pointerId !== pid) return;
   const evs = (e.getCoalescedEvents && e.getCoalescedEvents().length) ? e.getCoalescedEvents() : [e];
   if (cur && STROKE[cur.k]) {
@@ -1923,11 +2034,12 @@ cv.addEventListener('pointermove', e => {
   flush();   // send right away instead of waiting for the next frame
 });
 function endPointer(e){
+  if (e.pointerType==='touch' && touchUp(e)) return;
   if (e.pointerId !== pid) return;
-  pid = null; crect = null;
+  pid = null; pidType = null; crect = null;
   if (cur) {
     const it = cur; cur = null; it._pred = null;
-    if (it.k==='laser') { it._end = performance.now(); send({t:'end', id:it.id}); }
+    if (it.k==='laser') { const t = performance.now(); for (const l of lasers) l._end = t; send({t:'end', id:it.id}); }
     else if (SHAPE[it.k] && Math.hypot((it.b[0]-it.a[0])*sw, (it.b[1]-it.a[1])*sh) < 4) {
       items.splice(items.indexOf(it), 1); send({t:'del', id:it.id});
     } else { send({t:'end', id:it.id}); pushHist({a:'add', its:[it]}); toBase(it); }
