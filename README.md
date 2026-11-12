@@ -36,6 +36,7 @@ No tablet app to install. No subscription. No account.
 - **Pinch to zoom** with two fingers for fine detail, and drag with one finger (or two) to move around while zoomed; pinch back out to return to the full view
 - **Live screen preview** on the tablet so you can see where you're drawing
 - **PC keyboard shortcuts** so you can control it without touching the tablet
+- **Android tablet over USB:** plug the tablet into the PC for steadier, lower lag than WiFi ([details](#connect-an-android-tablet-over-usb-lowest-lag))
 - **Phone camera over USB:** use your Android phone as a face cam or document cam, with no app on the phone ([details](#use-your-android-phone-as-a-camera-usb-no-app))
 
 | Circle to select | Edit many things at once |
@@ -106,6 +107,20 @@ The tray icon (red circle near the clock) also has Paste, Clear, Whiteboard, Hid
 - **On the tablet:** copy an image in your browser, tap **Paste** in the tool bar, then long-press the box and choose **Paste**. If only a link was copied, the PC downloads the image for you.
 - You can also tap **Image** to pick from your photos, or drag an image onto the page.
 
+## Connect an Android tablet over USB (lowest lag)
+
+WiFi can briefly stall and make the ink jump. With a USB cable, the pen data goes straight down the wire, so the ink stays steady. Nothing gets installed on the tablet.
+
+**Needs:** an Android tablet and a USB cable that carries data (not a charge-only cable). iPads can't do this from a Windows PC; see [Tips](#tips) for the best iPad setup.
+
+1. **On the tablet, once:** go to **Settings → About tablet** and tap **Build number** 7 times. Then open **Developer options** and turn on **USB debugging**.
+2. Start InkCast as usual and plug the tablet into the PC.
+3. Double-click **`InkCast USB.bat`**, or choose **Android tablet over USB** in the InkCast tray menu. The first time, it offers to download adb (it comes with [scrcpy](https://github.com/Genymobile/scrcpy), from its official GitHub release, with the checksum checked).
+4. On the tablet, tap **Allow** on "Allow USB debugging?" (tick *Always allow*).
+5. InkCast opens on the tablet at `http://localhost:8765`. Keep the USB window open while you draw. If you unplug the cable, plug it back in and it reconnects by itself.
+
+> The `localhost` page keeps its own settings (palette, Fingers), separate from the WiFi address.
+
 ## Use your Android phone as a camera (USB, no app)
 
 Turn your Android phone into a smooth, low-lag camera for your recordings: a **face cam** in the corner, a **document camera** pointed at paper or a book, or a **full-screen live camera you can draw over** with InkCast. It runs over a USB cable, so it doesn't depend on WiFi, and nothing gets installed on the phone.
@@ -130,7 +145,7 @@ While it runs: **Alt + ↑ / ↓** zoom, **Alt + ← / →** rotate, **Alt + F**
 
 ## Tips
 
-- For the lowest lag, connect the PC to the router with a cable and put the tablet on 5 GHz WiFi.
+- For the lowest lag on an Android tablet, [connect it over USB](#connect-an-android-tablet-over-usb-lowest-lag). On WiFi (and on iPad), connect the PC to the router with a cable and put the tablet on 5 GHz WiFi.
 - Turn off any VPN on the PC; it can stop the tablet from reaching it.
 - **Fingers** on = fingers draw. Off = only the pencil draws. It switches off automatically the first time a pencil is used.
 - **Preview** turns the live PC picture on the tablet on or off. **Screen** and **Board** switch where you're drawing.
@@ -163,7 +178,10 @@ No. It runs in the tablet's browser. You can add it to the home screen to open i
 Only for the first install. After that the PC and tablet talk directly over your local WiFi; nothing is sent to the cloud. (Pasting an image link is the exception: the PC downloads that image.)
 
 **Is there lag?**
-Very little on a normal home network. Only pen coordinates travel over WiFi, not video. A cable from the PC to the router and 5 GHz WiFi on the tablet give the best results.
+Very little on a normal home network. Only pen coordinates travel over WiFi, not video. A cable from the PC to the router and 5 GHz WiFi on the tablet give the best results, and an Android tablet can [connect over USB](#connect-an-android-tablet-over-usb-lowest-lag) to skip WiFi entirely.
+
+**Why can an Android tablet connect over USB but an iPad can't?**
+Android has a built-in developer tool called adb. When USB debugging is on, adb can pass network traffic through the cable: the tablet opens `http://localhost:8765` and adb carries it to InkCast on the PC. iPads have nothing like that for Windows. Apple only lets iPads talk to a PC over USB through its own apps (like iTunes), and those can't forward a web page. The one exception is a cellular iPad with **Personal Hotspot**, which can share a network over the cable, but that needs a mobile data plan. On iPad, the best setup is the PC wired to the router and the iPad on 5 GHz WiFi.
 
 **Can I use it as a whiteboard?**
 Yes. Tap **Board** and pick a white, grid, black or green chalkboard background from the menu, and tap **Screen** to go back. Each keeps its own drawings.
@@ -186,7 +204,7 @@ Text uses the same font files on both ends (the PC shares its fonts with the tab
 
 ## Credits
 
-The phone camera feature uses [scrcpy](https://github.com/Genymobile/scrcpy) by Genymobile (Apache License 2.0). It's downloaded from its official release on first use and isn't bundled with InkCast.
+The phone camera and USB tablet features use [scrcpy](https://github.com/Genymobile/scrcpy) by Genymobile (Apache License 2.0). It's downloaded from its official release on first use and isn't bundled with InkCast.
 
 ## License
 

@@ -1087,6 +1087,17 @@ def main():
 
     camera.triggered.connect(start_camera)
     camera.setVisible(os.path.isfile(cam_bat))
+    usb_bat = os.path.join(os.path.dirname(os.path.abspath(__file__)), "InkCast USB.bat")
+    usb = QAction("Android tablet over USB...")
+
+    def start_usb():
+        try:
+            os.startfile(usb_bat)   # opens the launcher in its own window
+        except (AttributeError, OSError) as e:
+            tray.showMessage(APP, f"Couldn't start USB mode: {e}")
+
+    usb.triggered.connect(start_usb)
+    usb.setVisible(os.path.isfile(usb_bat))
     quit_ = QAction(f"Quit {APP}")
     quit_.triggered.connect(app.quit)
     menu.addAction(info)
@@ -1094,6 +1105,7 @@ def main():
     for a in (paste, clear, board, toggle):
         menu.addAction(a)
     menu.addSeparator()
+    menu.addAction(usb)
     menu.addAction(camera)
     menu.addSeparator()
     menu.addAction(quit_)
