@@ -30,7 +30,7 @@ from PySide6.QtGui import (QAction, QColor, QFont, QGuiApplication, QIcon, QImag
 from PySide6.QtWidgets import QApplication, QLabel, QMenu, QSystemTrayIcon, QVBoxLayout, QWidget
 
 APP = "InkCast"
-PORT = int(os.environ.get("INKCAST_PORT", "8765"))
+PORT = int(os.environ.get("INKCAST_PORT") or "8765")  # change with: setx INKCAST_PORT 6969
 REF = 1920.0                      # sizes are defined relative to a 1920px-wide screen
 STROKES = {"pen", "marker", "hl", "neon", "laser", "farrow"}
 SHAPES = {"line", "arrow", "rect", "ellipse"}

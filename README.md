@@ -86,6 +86,24 @@ Open the `inkcast-main` folder and double-click **`Start InkCast.bat`**. No term
 - **`No such file or directory: 'requirements.txt'`** or **`can't open file 'inkcast.py'`**: the terminal isn't inside the `inkcast-main` folder. Run `cd inkcast-main` and try again.
 - **`python` is not recognized:** Python isn't installed or wasn't added to PATH. Reinstall it and tick **"Add python.exe to PATH"**.
 - **The tablet can't open the address:** make sure both devices are on the same WiFi, turn off any VPN on the PC, and check that you clicked **Allow** on the firewall message.
+- **InkCast closes right away with an "address already in use" error:** another program is using port 8765. [Change the port](#change-the-port).
+
+### Change the port
+
+InkCast uses port **8765** by default, so the address looks like `http://192.168.0.105:8765` on WiFi and `http://localhost:8765` in [USB mode](#connect-an-android-tablet-over-usb-lowest-lag). To use a different number, for example 6969:
+
+1. Open PowerShell and run:
+   ```powershell
+   setx INKCAST_PORT 6969
+   ```
+2. Quit InkCast from the tray icon and start it again. (Windows only gives the new setting to programs started after you run `setx`.)
+3. Use the new address on the tablet: the QR code and the WiFi address now end in `:6969`, and USB mode opens `http://localhost:6969`. If you added the page to your home screen, add it again with the new address.
+
+Pick a number between 1024 and 65535 that nothing else uses. To go back to 8765, run:
+```powershell
+reg delete HKCU\Environment /v INKCAST_PORT /f
+```
+then restart InkCast.
 
 ## PC shortcuts
 
@@ -119,7 +137,7 @@ WiFi can briefly stall and make the ink jump. With a USB cable, the pen data goe
 4. On the tablet, tap **Allow** on "Allow USB debugging?" (tick *Always allow*).
 5. InkCast opens on the tablet at `http://localhost:8765`. Keep the USB window open while you draw. If you unplug the cable, plug it back in and it reconnects by itself.
 
-> The `localhost` page keeps its own settings (palette, Fingers), separate from the WiFi address.
+> The `localhost` page keeps its own settings (palette, Fingers), separate from the WiFi address. If you [changed the port](#change-the-port), USB mode uses the new one automatically.
 
 ## Use your Android phone as a camera (USB, no app)
 
