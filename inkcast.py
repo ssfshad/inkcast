@@ -155,6 +155,7 @@ class Bridge(QObject):
     ops = Signal(str)       # raw JSON text from the tablet, parsed on the GUI thread
     hotkey = Signal(str)    # name of a pressed global shortcut
     tablet = Signal()       # a tablet connected
+    pcpaste = Signal()      # the tablet asked for the image on the PC clipboard
 
 
 SMOOTH_K = (0.06, 0.24, 0.4, 0.24, 0.06)  # tablets report pen positions in whole pixels; this blurs the stairs out
@@ -720,6 +721,12 @@ class Server:
             print("Couldn't load image:", e)
             await ws.send_str(json.dumps({"t": "toast", "msg": "Couldn't load that image. Try saving it to Photos and use Image."}))
 
+    def toast(self, msg):
+        """Show a message on the tablet (callable from the GUI thread)."""
+        if self.loop:
+            self.loop.call_soon_threadsafe(
+                lambda: asyncio.ensure_future(self.broadcast({"t": "toast", "msg": msg})))
+
     def add_image(self, src, iw, ih):
         """Called from the GUI thread with an image from the PC clipboard."""
         if self.loop:
@@ -793,6 +800,9 @@ class Server:
                 try:
                     d = json.loads(m.data)
                 except ValueError:
+                    continue
+                if d.get("t") == "pcpaste":
+                    self.bridge.pcpaste.emit()   # the clipboard can only be read on the GUI thread
                     continue
                 if d.get("t") == "fetch":
                     url = str(d.get("url", ""))
@@ -1020,7 +1030,7 @@ def main():
     tray = QSystemTrayIcon(tray_icon())
     tray.setToolTip(f"{APP} - open {url} on your tablet")
 
-    def paste_from_pc():
+    def paste_from_pc(from_tablet=False):
         cb = QApplication.clipboard()
         img = cb.image()
         md = cb.mimeData()
@@ -1039,7 +1049,13 @@ def main():
         if txt.startswith(("http://", "https://")):
             server.fetch_for_pc(txt)
             return
-        tray.showMessage(APP, "No image in the clipboard. Right-click an image and choose Copy image first.")
+        msg = "No image in the PC clipboard. Right-click an image and choose Copy image first."
+        if from_tablet:
+            server.toast(msg)
+        else:
+            tray.showMessage(APP, msg)
+
+    bridge.pcpaste.connect(lambda: paste_from_pc(True))
 
     connect_win = ConnectWindow(url)
     bridge.tablet.connect(connect_win.hide)
@@ -1052,7 +1068,7 @@ def main():
     board = QAction("Whiteboard on / off\tCtrl+Alt+W")
     board.triggered.connect(lambda: server.command("board"))
     paste = QAction("Paste image\tCtrl+Alt+V")
-    paste.triggered.connect(paste_from_pc)
+    paste.triggered.connect(lambda: paste_from_pc())
     toggle = QAction("Hide ink\tCtrl+Alt+H")
 
     def toggle_ink():
@@ -1230,6 +1246,7 @@ const I = {
  select:'<path d="M5 3l5.5 17 2.6-7.4L20.5 10z"/>',
  eraser:'<path d="M8 20h12"/><path d="M3.5 14.5l9-9a2 2 0 0 1 2.8 0l3.2 3.2a2 2 0 0 1 0 2.8L10 20H7.5z"/>',
  image:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/><circle cx="15.5" cy="9" r="1.5"/>',
+ pcpaste:'<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4M12 7v6M9.5 10.5L12 13l2.5-2.5"/>',
  paste:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2.5h6V4M9 10h6M9 14h4"/>',
  undo:'<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
  redo:'<path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/>',
@@ -1243,7 +1260,7 @@ const I = {
 const svg = n => '<svg viewBox="0 0 24 24">'+I[n]+'</svg>';
 const TOOLS = [['pen','Pen'],['marker','Marker'],['hl','Highlight'],['neon','Neon'],['laser','Laser'],'|',
   ['line','Line'],['arrow','Arrow'],['farrow','Curve'],['rect','Box'],['ellipse','Circle'],['text','Text'],'|',
-  ['select','Select'],['eraser','Eraser'],['image','Image'],['paste','Paste']];
+  ['select','Select'],['eraser','Eraser'],['image','Image'],['paste','Paste'],['pcpaste','From PC']];
 const COLORS = ['#ff3b30','#ff9500','#ffcc00','#34c759','#00c7ff','#0a84ff','#bf5af2','#ff2d92','#ffffff','#000000'];
 const STROKE = {pen:1,marker:1,hl:1,neon:1,laser:1,farrow:1}, SHAPE = {line:1,arrow:1,rect:1,ellipse:1};
 const WMUL = {pen:1,marker:2.2,hl:4,neon:1.2,laser:1.2,farrow:1};
@@ -1262,7 +1279,7 @@ const fontOf = (f, px) => '700 ' + px + 'px ' + (FONTS[f] || FONTS.sans);
 
 let S = {tool:'pen', color:'#ff3b30', size:6, fingers:true, fingersSet:false, live:true, bg:'white', font:'sans'};
 try { Object.assign(S, JSON.parse(localStorage.getItem('inkcast.s')||'{}')); } catch(e){}
-if (!TOOLS.some(t => t[0]===S.tool) || S.tool==='image' || S.tool==='paste') S.tool = 'pen';
+if (!TOOLS.some(t => t[0]===S.tool) || S.tool==='image' || S.tool==='paste' || S.tool==='pcpaste') S.tool = 'pen';
 if (!BGS.includes(S.bg)) S.bg = 'white';
 if (!FONTS[S.font]) S.font = 'sans';
 const isHex = c => typeof c==='string' && /^#[0-9a-f]{6}$/i.test(c);
@@ -1296,6 +1313,10 @@ for (const t of TOOLS) {
   b.onclick = () => {
     if (t[0]==='image') { $('file').click(); return; }
     if (t[0]==='paste') { openPaste(); return; }
+    if (t[0]==='pcpaste') {   // the PC replies with the image (or a toast if its clipboard has none)
+      if (!connected) { toast('Not connected to the PC'); return; }
+      send({t:'pcpaste'}); flush(); return;
+    }
     setTool(t[0]);
   };
   side.appendChild(b);
